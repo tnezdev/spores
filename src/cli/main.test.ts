@@ -71,6 +71,191 @@ describe("CLI", () => {
     })
   })
 
+  describe("workflow", () => {
+    const graphJson = JSON.stringify({
+      id: "test-graph",
+      name: "Test Graph",
+      version: "1.0",
+      nodes: [
+        { id: "A", label: "Step A", artifact_type: "doc" },
+        { id: "B", label: "Step B", artifact_type: "doc" },
+      ],
+      edges: [{ from: "A", to: "B" }],
+    })
+
+    async function writeGraphFile(dir: string): Promise<string> {
+      const { writeFile } = await import("node:fs/promises")
+      const path = join(dir, "graph.json")
+      await writeFile(path, graphJson)
+      return path
+    }
+
+    it("create + list round-trip", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+
+      const create = await run(...base, "workflow", "create", graphFile)
+      expect(create.exitCode).toBe(0)
+
+      const list = (await runJson(...base, "workflow", "list")) as Array<{
+        id: string
+      }>
+      expect(list).toHaveLength(1)
+      expect(list[0]!.id).toBe("test-graph")
+    })
+
+    it("show displays graph details", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+      await run(...base, "workflow", "create", graphFile)
+
+      const show = (await runJson(...base, "workflow", "show", "test-graph")) as {
+        id: string
+        nodes: Array<{ id: string }>
+      }
+      expect(show.id).toBe("test-graph")
+      expect(show.nodes).toHaveLength(2)
+    })
+
+    it("run creates a new run", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+      await run(...base, "workflow", "create", graphFile)
+
+      const result = (await runJson(
+        ...base,
+        "workflow",
+        "run",
+        "test-graph",
+      )) as { run_id: string; graph_id: string }
+      expect(result.run_id).toBeDefined()
+      expect(result.graph_id).toBe("test-graph")
+    })
+
+    it("full lifecycle: next -> start -> done -> next -> start -> done", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+      await run(...base, "workflow", "create", graphFile)
+
+      const created = (await runJson(
+        ...base,
+        "workflow",
+        "run",
+        "test-graph",
+      )) as { run_id: string }
+      const runId = created.run_id
+
+      // Next should return A
+      let next = (await runJson(...base, "workflow", "next", runId)) as string[]
+      expect(next).toEqual(["A"])
+
+      // Start A
+      const startA = await run(...base, "workflow", "start", runId, "A")
+      expect(startA.exitCode).toBe(0)
+
+      // Done A
+      const doneA = await run(...base, "workflow", "done", runId, "A")
+      expect(doneA.exitCode).toBe(0)
+
+      // Next should return B
+      next = (await runJson(...base, "workflow", "next", runId)) as string[]
+      expect(next).toEqual(["B"])
+
+      // Start and done B
+      await run(...base, "workflow", "start", runId, "B")
+      await run(...base, "workflow", "done", runId, "B")
+
+      // Next should be empty
+      next = (await runJson(...base, "workflow", "next", runId)) as string[]
+      expect(next).toEqual([])
+    })
+
+    it("status shows node states", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+      await run(...base, "workflow", "create", graphFile)
+
+      const created = (await runJson(
+        ...base,
+        "workflow",
+        "run",
+        "test-graph",
+      )) as { run_id: string }
+
+      const status = (await runJson(
+        ...base,
+        "workflow",
+        "status",
+        created.run_id,
+      )) as Record<string, { status: string }>
+      expect(status["A"]!.status).toBe("pending")
+      expect(status["B"]!.status).toBe("pending")
+    })
+
+    it("fail records failure with reason", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+      await run(...base, "workflow", "create", graphFile)
+
+      const created = (await runJson(
+        ...base,
+        "workflow",
+        "run",
+        "test-graph",
+      )) as { run_id: string }
+      const runId = created.run_id
+
+      await run(...base, "workflow", "start", runId, "A")
+      const fail = await run(
+        ...base,
+        "workflow",
+        "fail",
+        runId,
+        "A",
+        "--reason",
+        "timed out",
+      )
+      expect(fail.exitCode).toBe(0)
+
+      const history = (await runJson(
+        ...base,
+        "workflow",
+        "history",
+        runId,
+      )) as Array<{ to_status: string; reason?: string }>
+      const failEntry = history.find((t) => t.to_status === "failed")
+      expect(failEntry).toBeDefined()
+      expect(failEntry!.reason).toBe("timed out")
+    })
+
+    it("history shows transitions", async () => {
+      await run(...base, "init")
+      const graphFile = await writeGraphFile(tmpDir)
+      await run(...base, "workflow", "create", graphFile)
+
+      const created = (await runJson(
+        ...base,
+        "workflow",
+        "run",
+        "test-graph",
+      )) as { run_id: string }
+      const runId = created.run_id
+
+      await run(...base, "workflow", "start", runId, "A")
+      await run(...base, "workflow", "done", runId, "A")
+
+      const history = (await runJson(
+        ...base,
+        "workflow",
+        "history",
+        runId,
+      )) as Array<{ node_id: string; to_status: string }>
+      expect(history).toHaveLength(2)
+      expect(history[0]!.to_status).toBe("in_progress")
+      expect(history[1]!.to_status).toBe("completed")
+    })
+  })
+
   describe("memory", () => {
     it("remember + recall round-trip", async () => {
       await run(...base, "init")

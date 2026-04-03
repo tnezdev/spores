@@ -12,6 +12,18 @@ import {
   dreamCommand,
   forgetCommand,
 } from "./commands/memory.js"
+import {
+  workflowCreateCommand,
+  workflowListCommand,
+  workflowShowCommand,
+  workflowRunCommand,
+  workflowStatusCommand,
+  workflowNextCommand,
+  workflowStartCommand,
+  workflowDoneCommand,
+  workflowFailCommand,
+  workflowHistoryCommand,
+} from "./commands/workflow.js"
 
 export type Ctx = {
   adapter: MemoryAdapter
@@ -69,21 +81,46 @@ const commands: Record<string, Command> = {
   "memory reinforce": reinforceCommand,
   "memory dream": dreamCommand,
   "memory forget": forgetCommand,
+  "workflow create": workflowCreateCommand,
+  "workflow list": workflowListCommand,
+  "workflow show": workflowShowCommand,
+  "workflow run": workflowRunCommand,
+  "workflow status": workflowStatusCommand,
+  "workflow next": workflowNextCommand,
+  "workflow start": workflowStartCommand,
+  "workflow done": workflowDoneCommand,
+  "workflow fail": workflowFailCommand,
+  "workflow history": workflowHistoryCommand,
 }
 
 const USAGE = `Usage: spores <command> [args] [flags]
 
 Commands:
-  init                          Scaffold .spores/ directory
-  memory remember <content>     Store a new memory
-  memory recall [query]         Query memories
-  memory reinforce <key>        Strengthen a memory
-  memory dream                  Run consolidation cycle
-  memory forget <key>           Remove a memory
+  init                                Scaffold .spores/ directory
+
+  memory remember <content>           Store a new memory
+  memory recall [query]               Query memories
+  memory reinforce <key>              Strengthen a memory
+  memory dream                        Run consolidation cycle
+  memory forget <key>                 Remove a memory
+
+  workflow create <file.json>         Register a graph from JSON
+  workflow list                       List registered graphs
+  workflow show <graph-id>            Show graph details
+  workflow run <graph-id>             Create a new run
+  workflow status <run-id>            Show node states for a run
+  workflow next <run-id>              Show available nodes
+  workflow start <run-id> <node>      Start a node (-> in_progress)
+  workflow done <run-id> <node>       Complete a node
+  workflow fail <run-id> <node>       Fail a node
+  workflow history <run-id>           Show transition history
 
 Flags:
-  --json                        Output as JSON
-  --base-dir <path>             Override working directory`
+  --json                              Output as JSON
+  --base-dir <path>                   Override working directory
+  --identity <name>                   Override identity for transitions
+  --reason <text>                     Reason for done/fail transitions
+  --name <text>                       Name for a new run`
 
 export function output<T>(
   ctx: Ctx,

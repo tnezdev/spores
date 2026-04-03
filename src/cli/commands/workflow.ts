@@ -1,0 +1,201 @@
+import { readFile } from "node:fs/promises"
+import type { Command, Ctx } from "../main.js"
+import { output } from "../main.js"
+import { FilesystemWorkflowAdapter } from "../../workflow/filesystem.js"
+import { Runtime } from "../../workflow/runtime.js"
+import type { GraphDef } from "../../types.js"
+import {
+  formatGraphs,
+  formatRuns,
+  formatStatus,
+  formatNext,
+  formatHistory,
+} from "../format.js"
+
+function makeRuntime(ctx: Ctx): Runtime {
+  const adapter = new FilesystemWorkflowAdapter(ctx.baseDir)
+  return new Runtime(adapter)
+}
+
+function identity(flags: Record<string, string | true>): string {
+  if (typeof flags["identity"] === "string") return flags["identity"]
+  return process.env["USER"] ?? "anonymous"
+}
+
+// ---- Graph management -----------------------------------------------------
+
+export const workflowCreateCommand: Command = async (ctx, args) => {
+  const file = args[0]
+  if (!file) throw new Error("Usage: spores workflow create <file.json>")
+
+  const data = await readFile(file, "utf-8")
+  const graph = JSON.parse(data) as GraphDef
+
+  if (!graph.id || !graph.name || !graph.version || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
+    throw new Error("Invalid graph: must have id, name, version, nodes[], and edges[]")
+  }
+
+  const rt = makeRuntime(ctx)
+  await rt.registerGraph(graph)
+
+  output(ctx, { registered: graph.id, name: graph.name }, (d) =>
+    `Registered graph: ${d.registered} (${d.name})`,
+  )
+}
+
+export const workflowListCommand: Command = async (ctx) => {
+  const rt = makeRuntime(ctx)
+  const graphs = await rt.listGraphs()
+  output(ctx, graphs, formatGraphs)
+}
+
+export const workflowShowCommand: Command = async (ctx, args) => {
+  const graphId = args[0]
+  if (!graphId) throw new Error("Usage: spores workflow show <graph-id>")
+
+  const rt = makeRuntime(ctx)
+  const graph = await rt.getGraph(graphId)
+  if (!graph) throw new Error(`Unknown graph: ${graphId}`)
+
+  output(ctx, graph, (g) => {
+    const lines = [`${g.name} (${g.id}) v${g.version}`]
+    if (g.description) lines.push(`  ${g.description}`)
+    lines.push("")
+    lines.push("Nodes:")
+    for (const n of g.nodes) {
+      const tags = [n.artifact_type]
+      if (n.type === "manual") tags.push("manual")
+      lines.push(`  ${n.id} — ${n.label} [${tags.join(", ")}]`)
+    }
+    lines.push("")
+    lines.push("Edges:")
+    for (const e of g.edges) {
+      const cond =
+        e.condition && e.condition !== "always"
+          ? ` (${e.condition.criteria})`
+          : ""
+      lines.push(`  ${e.from} → ${e.to}${cond}`)
+    }
+    return lines.join("\n")
+  })
+}
+
+// ---- Run lifecycle --------------------------------------------------------
+
+export const workflowRunCommand: Command = async (ctx, args, flags) => {
+  const graphId = args[0]
+  if (!graphId) throw new Error("Usage: spores workflow run <graph-id>")
+
+  const name = typeof flags["name"] === "string" ? flags["name"] : undefined
+  const rt = makeRuntime(ctx)
+  const run = await rt.createRun(graphId, name)
+
+  output(ctx, run, (r) => `Created run: ${r.run_id} (graph: ${r.graph_id})`)
+}
+
+// ---- Workflow execution ---------------------------------------------------
+
+export const workflowStatusCommand: Command = async (ctx, args) => {
+  const runId = args[0]
+  if (!runId) throw new Error("Usage: spores workflow status <run-id>")
+
+  const rt = makeRuntime(ctx)
+  const run = await rt.getRun(runId)
+  if (!run) throw new Error(`Unknown run: ${runId}`)
+  const graph = await rt.getGraph(run.graph_id)
+  if (!graph) throw new Error(`Unknown graph: ${run.graph_id}`)
+
+  const states = rt.deriveNodeStates(graph, run)
+  output(ctx, states, (s) => formatStatus(s, graph))
+}
+
+export const workflowNextCommand: Command = async (ctx, args) => {
+  const runId = args[0]
+  if (!runId) throw new Error("Usage: spores workflow next <run-id>")
+
+  const rt = makeRuntime(ctx)
+  const run = await rt.getRun(runId)
+  if (!run) throw new Error(`Unknown run: ${runId}`)
+
+  const available = await rt.next(run.graph_id, runId)
+  output(ctx, available, formatNext)
+}
+
+export const workflowStartCommand: Command = async (ctx, args, flags) => {
+  const runId = args[0]
+  const nodeId = args[1]
+  if (!runId || !nodeId)
+    throw new Error("Usage: spores workflow start <run-id> <node-id>")
+
+  const rt = makeRuntime(ctx)
+  const run = await rt.getRun(runId)
+  if (!run) throw new Error(`Unknown run: ${runId}`)
+
+  const t = await rt.transition(
+    run.graph_id,
+    runId,
+    nodeId,
+    "in_progress",
+    identity(flags),
+  )
+  output(ctx, t, (t) => `Started: ${t.node_id} (pass ${t.pass})`)
+}
+
+export const workflowDoneCommand: Command = async (ctx, args, flags) => {
+  const runId = args[0]
+  const nodeId = args[1]
+  if (!runId || !nodeId)
+    throw new Error("Usage: spores workflow done <run-id> <node-id>")
+
+  const rt = makeRuntime(ctx)
+  const run = await rt.getRun(runId)
+  if (!run) throw new Error(`Unknown run: ${runId}`)
+
+  const reason =
+    typeof flags["reason"] === "string" ? flags["reason"] : undefined
+
+  const t = await rt.transition(
+    run.graph_id,
+    runId,
+    nodeId,
+    "completed",
+    identity(flags),
+    reason ? { reason } : undefined,
+  )
+  output(ctx, t, (t) => `Completed: ${t.node_id} (pass ${t.pass})`)
+}
+
+export const workflowFailCommand: Command = async (ctx, args, flags) => {
+  const runId = args[0]
+  const nodeId = args[1]
+  if (!runId || !nodeId)
+    throw new Error("Usage: spores workflow fail <run-id> <node-id>")
+
+  const rt = makeRuntime(ctx)
+  const run = await rt.getRun(runId)
+  if (!run) throw new Error(`Unknown run: ${runId}`)
+
+  const reason =
+    typeof flags["reason"] === "string" ? flags["reason"] : undefined
+
+  const t = await rt.transition(
+    run.graph_id,
+    runId,
+    nodeId,
+    "failed",
+    identity(flags),
+    reason ? { reason } : undefined,
+  )
+  output(ctx, t, (t) => `Failed: ${t.node_id} (pass ${t.pass})`)
+}
+
+export const workflowHistoryCommand: Command = async (ctx, args) => {
+  const runId = args[0]
+  if (!runId) throw new Error("Usage: spores workflow history <run-id>")
+
+  const rt = makeRuntime(ctx)
+  const run = await rt.getRun(runId)
+  if (!run) throw new Error(`Unknown run: ${runId}`)
+
+  output(ctx, run.history, formatHistory)
+}

@@ -10,6 +10,10 @@ const DEFAULTS: SporesConfig = {
     defaultTier: "L1",
     dreamDepth: 3,
   },
+  workflow: {
+    graphsDir: ".spores/workflows",
+    runsDir: ".spores/runs",
+  },
 }
 
 type TomlSection = Record<string, string>
@@ -50,7 +54,11 @@ function parseToml(text: string): TomlDoc {
 }
 
 function applyToml(config: SporesConfig, doc: TomlDoc): SporesConfig {
-  const result = { ...config, memory: { ...config.memory } }
+  const result = {
+    ...config,
+    memory: { ...config.memory },
+    workflow: { ...config.workflow },
+  }
 
   if (typeof doc["adapter"] === "string") {
     result.adapter = doc["adapter"]
@@ -63,6 +71,12 @@ function applyToml(config: SporesConfig, doc: TomlDoc): SporesConfig {
       result.memory.defaultTier = mem["default_tier"] as MemoryTier
     if (mem["dream_depth"] !== undefined)
       result.memory.dreamDepth = parseInt(mem["dream_depth"], 10)
+  }
+
+  const wf = doc["workflow"]
+  if (typeof wf === "object") {
+    if (wf["graphs_dir"] !== undefined) result.workflow.graphsDir = wf["graphs_dir"]
+    if (wf["runs_dir"] !== undefined) result.workflow.runsDir = wf["runs_dir"]
   }
 
   return result
@@ -78,7 +92,7 @@ async function tryReadToml(path: string): Promise<TomlDoc | undefined> {
 }
 
 export async function loadConfig(baseDir: string): Promise<SporesConfig> {
-  let config = { ...DEFAULTS, memory: { ...DEFAULTS.memory } }
+  let config = { ...DEFAULTS, memory: { ...DEFAULTS.memory }, workflow: { ...DEFAULTS.workflow } }
 
   const globalToml = await tryReadToml(
     join(homedir(), ".spores", "config.toml"),

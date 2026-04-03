@@ -12,6 +12,10 @@ adapter = "filesystem"
 dir = ".spores/memory"
 default_tier = "L1"
 dream_depth = "3"
+
+[workflow]
+graphs_dir = ".spores/workflows"
+runs_dir = ".spores/runs"
 `
 
 export const initCommand: Command = async (ctx, _args, _flags) => {
@@ -28,6 +32,8 @@ export const initCommand: Command = async (ctx, _args, _flags) => {
   }
 
   await mkdir(memoryDir, { recursive: true })
+  await mkdir(join(sporesDir, "workflows"), { recursive: true })
+  await mkdir(join(sporesDir, "runs"), { recursive: true })
 
   if (!alreadyExists) {
     await writeFile(configPath, DEFAULT_CONFIG)
