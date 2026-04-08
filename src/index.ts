@@ -15,6 +15,13 @@ export type {
   Transition,
   NodeState,
   Run,
+  SporesUri,
+  Skill,
+  SkillRef,
+  TaskStatus,
+  TaskAnnotation,
+  Task,
+  TaskQuery,
 } from "./types.js"
 
 export type { MemoryAdapter, AdapterCapabilities } from "./memory/adapter.js"
@@ -30,3 +37,7 @@ export {
 } from "./workflow/expand.js"
 
 export { loadConfig } from "./config.js"
+
+export { listSkills, loadSkill } from "./skills/filesystem.js"
+
+export type { TaskAdapter } from "./tasks/adapter.js"
