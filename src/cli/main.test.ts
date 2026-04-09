@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 
@@ -397,6 +397,139 @@ describe("CLI", () => {
       await run(...base, "init")
       const { exitCode } = await run(...base, "memory", "remember")
       expect(exitCode).toBe(1)
+    })
+  })
+
+  describe("persona", () => {
+    // Override HOME so the global personas dir points into a scratch
+    // directory rather than the developer's real ~/.spores/personas.
+    let fakeHome: string
+
+    async function runPersona(
+      ...args: string[]
+    ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
+      const proc = Bun.spawn(["bun", CLI, ...args], {
+        stdout: "pipe",
+        stderr: "pipe",
+        env: { ...process.env, HOME: fakeHome },
+      })
+      const stdout = await new Response(proc.stdout).text()
+      const stderr = await new Response(proc.stderr).text()
+      const exitCode = await proc.exited
+      return { stdout: stdout.trim(), stderr: stderr.trim(), exitCode }
+    }
+
+    async function runPersonaJson(...args: string[]): Promise<unknown> {
+      const { stdout } = await runPersona("--json", ...args)
+      return JSON.parse(stdout)
+    }
+
+    async function writePersona(
+      dir: string,
+      filename: string,
+      body: string,
+    ): Promise<void> {
+      await mkdir(dir, { recursive: true })
+      await writeFile(join(dir, filename), body)
+    }
+
+    beforeEach(async () => {
+      fakeHome = await mkdtemp(join(tmpdir(), "spores-cli-home-"))
+    })
+
+    afterEach(async () => {
+      await rm(fakeHome, { recursive: true })
+    })
+
+    const SAMPLE = `---
+name: spores-maintainer
+description: Activate when working on the spores toolbelt
+memory_tags: [spores, npm]
+skills: [release]
+task_filter:
+  tags: [spores]
+---
+
+You are working on spores.
+The cwd is {{cwd}}.
+`
+
+    it("list returns empty when no personas exist", async () => {
+      const refs = (await runPersonaJson(
+        ...base,
+        "persona",
+        "list",
+      )) as unknown[]
+      expect(refs).toEqual([])
+    })
+
+    it("list shows project personas", async () => {
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "spores-maintainer.md",
+        SAMPLE,
+      )
+      const refs = (await runPersonaJson(
+        ...base,
+        "persona",
+        "list",
+      )) as Array<{ name: string; description: string }>
+      expect(refs).toHaveLength(1)
+      expect(refs[0]!.name).toBe("spores-maintainer")
+    })
+
+    it("view returns raw body with unsubstituted tokens", async () => {
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "spores-maintainer.md",
+        SAMPLE,
+      )
+      const file = (await runPersonaJson(
+        ...base,
+        "persona",
+        "view",
+        "spores-maintainer",
+      )) as { body: string; name: string }
+      expect(file.name).toBe("spores-maintainer")
+      expect(file.body).toContain("{{cwd}}") // raw — not substituted
+    })
+
+    it("activate returns rendered body with substituted tokens", async () => {
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "spores-maintainer.md",
+        SAMPLE,
+      )
+      const persona = (await runPersonaJson(
+        ...base,
+        "persona",
+        "activate",
+        "spores-maintainer",
+      )) as { body: string; situational: { cwd: string } }
+      expect(persona.body).not.toContain("{{cwd}}") // substituted
+      expect(persona.body).toContain(persona.situational.cwd)
+    })
+
+    it("view fails on missing persona", async () => {
+      const { exitCode, stderr } = await runPersona(
+        ...base,
+        "persona",
+        "view",
+        "nonexistent",
+      )
+      expect(exitCode).toBe(1)
+      expect(stderr).toContain("Persona not found")
+    })
+
+    it("activate fails on missing persona", async () => {
+      const { exitCode, stderr } = await runPersona(
+        ...base,
+        "persona",
+        "activate",
+        "nonexistent",
+      )
+      expect(exitCode).toBe(1)
+      expect(stderr).toContain("Persona not found")
     })
   })
 })

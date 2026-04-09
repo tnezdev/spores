@@ -9,6 +9,9 @@ import type {
   Skill,
   SkillRef,
   Task,
+  Persona,
+  PersonaFile,
+  PersonaRef,
 } from "../types.js"
 
 export function formatMemory(m: Memory): string {
@@ -168,4 +171,45 @@ export function formatNextTask(task: Task | null): string {
   if (task === null) return "No ready tasks."
   const tags = task.tags.length > 0 ? ` [${task.tags.join(", ")}]` : ""
   return `${task.id}  ${task.description}${tags}`
+}
+
+// ---------------------------------------------------------------------------
+// Persona formatters
+// ---------------------------------------------------------------------------
+
+export function formatPersonaRefs(refs: PersonaRef[]): string {
+  if (refs.length === 0) return "No personas found."
+  return table(
+    ["NAME", "DESCRIPTION"],
+    refs.map((r) => [r.name, r.description]),
+  )
+}
+
+function formatMeta(ref: PersonaRef): string {
+  const lines: string[] = []
+  if (ref.memory_tags.length > 0)
+    lines.push(`memory_tags: ${ref.memory_tags.join(", ")}`)
+  if (ref.skills.length > 0) lines.push(`skills: ${ref.skills.join(", ")}`)
+  if (ref.task_filter !== undefined)
+    lines.push(`task_filter: ${JSON.stringify(ref.task_filter)}`)
+  if (ref.workflow !== undefined) lines.push(`workflow: ${ref.workflow}`)
+  return lines.join("\n")
+}
+
+export function formatPersonaFile(file: PersonaFile): string {
+  return [
+    file.name,
+    `  ${file.description}`,
+    formatMeta(file),
+    "",
+    file.body,
+  ]
+    .filter((s) => s !== "")
+    .join("\n")
+}
+
+export function formatPersona(persona: Persona): string {
+  // Activated output is meant to be piped into an LLM — the body is the
+  // payload. Emit the body only, not the metadata header.
+  return persona.body
 }

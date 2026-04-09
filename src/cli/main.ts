@@ -38,6 +38,11 @@ import {
   taskDoneCommand,
   taskAnnotateCommand,
 } from "./commands/task.js"
+import {
+  personaListCommand,
+  personaViewCommand,
+  personaActivateCommand,
+} from "./commands/persona.js"
 
 type Parsed = {
   positional: string[]
@@ -101,6 +106,9 @@ const commands: Record<string, Command> = {
   "task show": taskShowCommand,
   "task done": taskDoneCommand,
   "task annotate": taskAnnotateCommand,
+  "persona list": personaListCommand,
+  "persona view": personaViewCommand,
+  "persona activate": personaActivateCommand,
 }
 
 const USAGE = `Usage: spores <command> [args] [flags]
@@ -135,6 +143,10 @@ Commands:
   task show <id>                      Show task details + annotations
   task done <id>                      Mark a task done
   task annotate <id> <text>           Append an annotation to a task
+
+  persona list                        List available personas
+  persona view <name>                 Show raw persona (no substitution)
+  persona activate <name>             Render persona with live facts (pipe to LLM)
 
 Flags:
   --json                              Output as JSON

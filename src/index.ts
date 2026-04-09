@@ -22,6 +22,10 @@ export type {
   TaskAnnotation,
   Task,
   TaskQuery,
+  PersonaRef,
+  PersonaFile,
+  Persona,
+  SituationalContext,
 } from "./types.js"
 
 export type { MemoryAdapter, AdapterCapabilities } from "./memory/adapter.js"
@@ -42,3 +46,12 @@ export { listSkills, loadSkill } from "./skills/filesystem.js"
 
 export type { TaskAdapter } from "./tasks/adapter.js"
 export { FilesystemTaskAdapter } from "./tasks/filesystem.js"
+
+export type { PersonaAdapter } from "./personas/adapter.js"
+export {
+  FilesystemPersonaAdapter,
+  listPersonas,
+  loadPersona,
+} from "./personas/filesystem.js"
+export { activatePersona } from "./personas/activate.js"
+export { resolveSituational } from "./personas/situational.js"
