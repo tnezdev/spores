@@ -1,6 +1,6 @@
 {
   "name": "@tnezdev/spores",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "description": "Executable toolbelt for agent self-improvement",
   "license": "MIT",
   "type": "module",
@@ -13,6 +13,12 @@
   "bin": {
     "spores": "./src/cli/main.ts"
   },
+  "files": [
+    "src/**/*.ts",
+    "!src/**/*.test.ts",
+    "AGENTS.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "bun test"
