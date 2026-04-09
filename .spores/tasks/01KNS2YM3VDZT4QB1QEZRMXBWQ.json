@@ -1,13 +1,18 @@
 {
   "description": "Update release-check skill + spores-release workflow from manual to CI-gate flow (after first successful CI publish)",
-  "status": "ready",
+  "status": "done",
   "tags": [
     "spores",
     "dogfood",
     "skill"
   ],
   "id": "01KNS2YM3VDZT4QB1QEZRMXBWQ",
-  "annotations": [],
+  "annotations": [
+    {
+      "text": "status: ready → done",
+      "timestamp": "2026-04-09T19:45:51.363Z"
+    }
+  ],
   "created_at": "2026-04-09T12:19:56.667Z",
-  "updated_at": "2026-04-09T12:19:56.667Z"
+  "updated_at": "2026-04-09T19:45:51.363Z"
 }
