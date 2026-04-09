@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+#
+# .spores/hooks/persona.activated
+#
+# Fires after `spores persona activate <name>` has rendered the persona body.
+# Recalls memories tagged with the persona's own memory_tags and appends them
+# to the activation output. This is the cheap v0 realization of the
+# persona memory_tags binding (tnezdev/spores#16, explored via hooks in #26).
+#
+# Contract — env vars set by spores:
+#   SPORES_EVENT               = "persona.activated"
+#   SPORES_BIN                 = path to the spores CLI entry (for callbacks)
+#   SPORES_PERSONA_NAME        = the activated persona's name
+#   SPORES_PERSONA_MEMORY_TAGS = comma-separated list from frontmatter
+#   SPORES_PERSONA_SKILLS      = comma-separated list
+#   SPORES_PERSONA_WORKFLOW    = single string or empty
+#
+# Stdout from this script is appended to the activation output.
+# Non-zero exit is surfaced as a warning — it does not fail the activation.
+
+set -euo pipefail
+
+if [[ -z "${SPORES_PERSONA_MEMORY_TAGS:-}" ]]; then
+  exit 0
+fi
+
+# Split the comma-separated tag list into positional args.
+IFS=',' read -ra tags <<< "$SPORES_PERSONA_MEMORY_TAGS"
+
+echo "## Recalled memory (tags: ${SPORES_PERSONA_MEMORY_TAGS})"
+echo
+
+# Call back into spores for each tag. --tag is repeatable on memory recall,
+# and the CLI handles deduplication by key internally.
+args=()
+for tag in "${tags[@]}"; do
+  [[ -z "$tag" ]] && continue
+  args+=(--tag "$tag")
+done
+
+if [[ ${#args[@]} -eq 0 ]]; then
+  exit 0
+fi
+
+# SPORES_BIN may be a path to main.ts (dev) or the installed `spores` binary.
+# Either way, invoking it via `bun` works in dev and `bun` is a peer dep of
+# this dogfood. For the installed case, prefer `spores` directly on PATH.
+if [[ "$SPORES_BIN" == *.ts ]]; then
+  bun "$SPORES_BIN" memory recall "${args[@]}" || true
+else
+  "$SPORES_BIN" memory recall "${args[@]}" || true
+fi

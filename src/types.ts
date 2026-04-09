@@ -232,3 +232,34 @@ export type Persona = PersonaRef & {
   situational: SituationalContext
   path: string
 }
+
+// ---------------------------------------------------------------------------
+// Hook types
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of firing a hook script. `ran: false` means no hook was found or it
+ * was not executable — a non-error quiet no-op. `ran: true` with a non-zero
+ * `exit_code` or an `error` string means the hook ran but failed; by design
+ * this is a warning, not a fatal error — the primary verb still succeeds.
+ *
+ * See tnezdev/spores#26 for the design rationale and event catalog.
+ */
+export type HookInvocation = {
+  event: string
+  ran: boolean
+  stdout: string
+  stderr: string
+  exit_code: number | null
+  error?: string | undefined
+}
+
+/**
+ * Output of `persona activate`: the rendered persona plus the result of any
+ * `persona.activated` hook that fired. The hook's stdout is appended to the
+ * human-formatted activation output; JSON mode serializes the whole wrapper.
+ */
+export type PersonaActivationOutput = {
+  persona: Persona
+  hook?: HookInvocation | undefined
+}
