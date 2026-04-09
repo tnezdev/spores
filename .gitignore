@@ -1,3 +1,6 @@
 node_modules/
 dist/
-.spores/
+
+# .spores/ is dogfooded in this repo (see #10). Track everything except
+# ephemeral per-run state.
+.spores/runs/

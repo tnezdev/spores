@@ -1,0 +1,12 @@
+{
+  "key": "repo-identity",
+  "content": "This repo publishes to npm as @tnezdev/spores. Zero production dependencies is a hard rule.",
+  "weight": 0.9,
+  "confidence": 1,
+  "tier": "L1",
+  "tags": [
+    "spores",
+    "npm-publishing"
+  ],
+  "timestamp": "2026-04-09T11:17:06.899Z"
+}
