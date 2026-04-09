@@ -23,7 +23,7 @@ Read the persona output. Do what step 3 of its "Before picking up work" section 
 
 ### `persona activate spores-maintainer`
 
-Principles, anti-patterns, and a "before picking up work" checklist. Situational tokens (`{{cwd}}`, `{{git_branch}}`, `{{timestamp}}`, `{{hostname}}`) get substituted at activation time. If you're piping into an LLM, this is the context injection. If you're a human, read it and internalize the non-negotiables before you start typing.
+Principles, anti-patterns, and a "before picking up work" checklist. Situational tokens (`{{cwd}}`, `{{git_branch}}`, `{{timestamp}}`, `{{hostname}}`) get substituted at activation time. Below the body, the `persona.activated` hook at `.spores/hooks/persona.activated` auto-recalls memories tagged with the persona's `memory_tags` and appends them — that's where current durable facts (runtime scope, publish path, etc.) come from. If you're piping into an LLM, this whole block is the context injection. If you're a human, read it and internalize the non-negotiables before you start typing.
 
 ### `task next`
 

@@ -10,6 +10,7 @@ import type {
   SkillRef,
   Task,
   Persona,
+  PersonaActivationOutput,
   PersonaFile,
   PersonaRef,
 } from "../types.js"
@@ -216,4 +217,22 @@ export function formatPersona(persona: Persona): string {
   // Activated output is meant to be piped into an LLM — the body is the
   // payload. Emit the body only, not the metadata header.
   return persona.body
+}
+
+/**
+ * Human formatter for `persona activate`: the rendered body followed by the
+ * stdout of a `persona.activated` hook if one ran and produced output. JSON
+ * mode serializes the whole wrapper structurally; this formatter only runs
+ * in human mode (see `output()` in src/cli/output.ts).
+ */
+export function formatPersonaActivation(
+  result: PersonaActivationOutput,
+): string {
+  const parts = [formatPersona(result.persona)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
 }

@@ -500,14 +500,55 @@ The cwd is {{cwd}}.
         "spores-maintainer.md",
         SAMPLE,
       )
-      const persona = (await runPersonaJson(
+      // activate wraps the rendered persona in a PersonaActivationOutput
+      // alongside any hook result (see tnezdev/spores#27). The persona
+      // lives under `.persona`; the hook is undefined when no hook fired.
+      const result = (await runPersonaJson(
         ...base,
         "persona",
         "activate",
         "spores-maintainer",
-      )) as { body: string; situational: { cwd: string } }
-      expect(persona.body).not.toContain("{{cwd}}") // substituted
-      expect(persona.body).toContain(persona.situational.cwd)
+      )) as {
+        persona: { body: string; situational: { cwd: string } }
+        hook?: unknown
+      }
+      expect(result.persona.body).not.toContain("{{cwd}}") // substituted
+      expect(result.persona.body).toContain(result.persona.situational.cwd)
+      expect(result.hook).toBeUndefined()
+    })
+
+    it("activate fires persona.activated hook and appends its stdout", async () => {
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "spores-maintainer.md",
+        SAMPLE,
+      )
+      // Write an executable hook that echoes env vars — this exercises
+      // event firing, env propagation, and output wrapping together.
+      const hookDir = join(tmpDir, ".spores", "hooks")
+      await mkdir(hookDir, { recursive: true })
+      const hookPath = join(hookDir, "persona.activated")
+      await writeFile(
+        hookPath,
+        '#!/usr/bin/env bash\necho "event=$SPORES_EVENT"\necho "name=$SPORES_PERSONA_NAME"\necho "tags=$SPORES_PERSONA_MEMORY_TAGS"\n',
+      )
+      const { chmod } = await import("node:fs/promises")
+      await chmod(hookPath, 0o755)
+
+      const result = (await runPersonaJson(
+        ...base,
+        "persona",
+        "activate",
+        "spores-maintainer",
+      )) as {
+        persona: { body: string }
+        hook: { ran: boolean; stdout: string; exit_code: number | null }
+      }
+      expect(result.hook.ran).toBe(true)
+      expect(result.hook.exit_code).toBe(0)
+      expect(result.hook.stdout).toContain("event=persona.activated")
+      expect(result.hook.stdout).toContain("name=spores-maintainer")
+      expect(result.hook.stdout).toContain("tags=spores,npm")
     })
 
     it("view fails on missing persona", async () => {

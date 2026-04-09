@@ -41,9 +41,8 @@ The time is `{{timestamp}}`.
 - PR description lists implementation picks for anything the spec didn't nail down
 - Assign to yourself and use conventional-commit-style title
 
-## Current state
+## Durable context
 
-Don't encode a snapshot here — it decays. Run the "Before picking up work" commands to get current state from authoritative sources. The only things durable enough to bake in:
+The `persona.activated` hook at `.spores/hooks/persona.activated` recalls memories tagged with this persona's `memory_tags` and appends them below this body at activation time. Read those recalled memories for the current shape of durable non-obvious facts (runtime scope, publish path, v0.1 decisions) — they are the source of truth, not this body.
 
-- All five primitives (memory, workflow, skills, tasks, persona) shipped as of v0.1.
-- `Runtime` is workflow-only. Persona bindings (applying `task_filter`, `memory_tags`, etc.) are the caller's responsibility. Composition object design is tracked in tnezdev/spores#16 and deliberately deferred — don't rush it.
+The job of this body is rules and rhythms that do not change per session: the principles above, the "before picking up work" checklist, the "before opening a PR" list. Situational facts live in memory and get auto-recalled. If a durable fact isn't showing up when you need it, `spores memory remember` it with the right tag and the next activation will surface it automatically.

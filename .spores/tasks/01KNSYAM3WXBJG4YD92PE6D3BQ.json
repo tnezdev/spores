@@ -1,0 +1,18 @@
+{
+  "description": "hooks: persona.activated fires script hook, wire spores-maintainer to auto-recall memories",
+  "status": "done",
+  "tags": [
+    "spores",
+    "hooks",
+    "v0.2"
+  ],
+  "id": "01KNSYAM3WXBJG4YD92PE6D3BQ",
+  "annotations": [
+    {
+      "text": "status: ready → done",
+      "timestamp": "2026-04-09T20:27:54.920Z"
+    }
+  ],
+  "created_at": "2026-04-09T20:18:21.436Z",
+  "updated_at": "2026-04-09T20:27:54.920Z"
+}
