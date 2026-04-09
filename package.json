@@ -9,6 +9,10 @@
     "url": "https://github.com/tnezdev/spores"
   },
   "author": "Travis Nesland",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "main": "./src/index.ts",
   "bin": {
     "spores": "./src/cli/main.ts"
