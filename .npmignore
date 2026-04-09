@@ -1,0 +1,10 @@
+# Exclude test files from the published package.
+# Belt-and-suspenders — the `files` whitelist in package.json is
+# authoritative, but keeping this prevents surprises if someone adds
+# a new top-level directory and forgets to exclude it.
+**/*.test.ts
+**/*.test.js
+.spores/
+.claude/
+tsconfig.json
+bun.lock
