@@ -1,0 +1,13 @@
+{
+  "description": "Investigate v0.2 composition object: Runtime vs Scope vs Spores top-level",
+  "status": "ready",
+  "tags": [
+    "spores",
+    "v0.2",
+    "design"
+  ],
+  "id": "01KNRZBRK1S3WAB2DTYG1TNTB5",
+  "annotations": [],
+  "created_at": "2026-04-09T11:17:12.929Z",
+  "updated_at": "2026-04-09T11:17:12.929Z"
+}

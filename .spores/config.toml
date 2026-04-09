@@ -1,0 +1,13 @@
+# SPORES configuration
+# See: https://github.com/tnezdev/spores
+
+adapter = "filesystem"
+
+[memory]
+dir = ".spores/memory"
+default_tier = "L1"
+dream_depth = "3"
+
+[workflow]
+graphs_dir = ".spores/workflows"
+runs_dir = ".spores/runs"
