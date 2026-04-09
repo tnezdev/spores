@@ -6,6 +6,8 @@ import type {
   Run,
   NodeState,
   Transition,
+  Skill,
+  SkillRef,
 } from "../types.js"
 
 export function formatMemory(m: Memory): string {
@@ -102,4 +104,23 @@ export function formatTransition(t: Transition): string {
 export function formatHistory(transitions: Transition[]): string {
   if (transitions.length === 0) return "No history."
   return transitions.map(formatTransition).join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Skill formatters
+// ---------------------------------------------------------------------------
+
+export function formatSkillRefs(refs: SkillRef[]): string {
+  if (refs.length === 0) return "No skills found."
+  return table(
+    ["NAME", "DESCRIPTION", "TAGS"],
+    refs.map((r) => [r.name, r.description, r.tags.join(", ")]),
+  )
+}
+
+export function formatSkill(skill: Skill): string {
+  const tags = skill.tags.length > 0 ? `\ntags: ${skill.tags.join(", ")}` : ""
+  return [`${skill.name}`, `  ${skill.description}${tags}`, "", skill.content].join(
+    "\n",
+  )
 }

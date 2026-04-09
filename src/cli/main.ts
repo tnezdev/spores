@@ -24,6 +24,11 @@ import {
   workflowFailCommand,
   workflowHistoryCommand,
 } from "./commands/workflow.js"
+import {
+  skillListCommand,
+  skillShowCommand,
+  skillRunCommand,
+} from "./commands/skill.js"
 
 export type Ctx = {
   adapter: MemoryAdapter
@@ -91,6 +96,9 @@ const commands: Record<string, Command> = {
   "workflow done": workflowDoneCommand,
   "workflow fail": workflowFailCommand,
   "workflow history": workflowHistoryCommand,
+  "skill list": skillListCommand,
+  "skill show": skillShowCommand,
+  "skill run": skillRunCommand,
 }
 
 const USAGE = `Usage: spores <command> [args] [flags]
@@ -114,6 +122,10 @@ Commands:
   workflow done <run-id> <node>       Complete a node
   workflow fail <run-id> <node>       Fail a node
   workflow history <run-id>           Show transition history
+
+  skill list                          List available skills
+  skill show <name>                   Show skill details and content
+  skill run <name>                    Output skill prompt (pipe to LLM)
 
 Flags:
   --json                              Output as JSON
