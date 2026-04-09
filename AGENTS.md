@@ -2,6 +2,10 @@
 
 Orientation for agent sessions. Concise. Read before touching code.
 
+## Start here
+
+This repo dogfoods its own toolbelt. Before touching code, run the three-command on-ramp in [`.spores/ONRAMP.md`](.spores/ONRAMP.md) — it activates the `spores-maintainer` persona, pulls the top ready task, and points you at the release skill. The rest of this file is reference; ONRAMP.md is the path.
+
 ## What is SPORES?
 
 A TypeScript library + CLI for agent in-loop primitives. Four things, focused by a fifth:

@@ -1,0 +1,9 @@
+{
+  "key": "74d0c073-f85d-43c0-afac-d8720f26e7d2",
+  "content": "v0.1 publish path is npm Trusted Publishing via GitHub Actions OIDC — no NPM_TOKEN. Trusted publisher is registered at npmjs.com for @tnezdev/spores against workflow filename publish.yml. Workflow needs permissions.id-token: write and npm >= 11.5.1. Chosen over automation tokens for no-secret-lifecycle and build provenance binding to exact workflow+repo+ref.",
+  "weight": 0.5,
+  "confidence": 1,
+  "tier": "L1",
+  "tags": [],
+  "timestamp": "2026-04-09T12:20:01.013Z"
+}
