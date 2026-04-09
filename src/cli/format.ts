@@ -8,6 +8,7 @@ import type {
   Transition,
   Skill,
   SkillRef,
+  Task,
 } from "../types.js"
 
 export function formatMemory(m: Memory): string {
@@ -123,4 +124,48 @@ export function formatSkill(skill: Skill): string {
   return [`${skill.name}`, `  ${skill.description}${tags}`, "", skill.content].join(
     "\n",
   )
+}
+
+// ---------------------------------------------------------------------------
+// Task formatters
+// ---------------------------------------------------------------------------
+
+export function formatTasks(tasks: Task[]): string {
+  if (tasks.length === 0) return "No tasks."
+  return table(
+    ["ID", "STATUS", "TAGS", "DESCRIPTION"],
+    tasks.map((t) => [
+      t.id,
+      t.status,
+      t.tags.join(","),
+      t.description,
+    ]),
+  )
+}
+
+export function formatTask(task: Task): string {
+  const lines: string[] = []
+  lines.push(`${task.id}  (${task.status})`)
+  lines.push(`  ${task.description}`)
+  if (task.tags.length > 0) lines.push(`  tags: ${task.tags.join(", ")}`)
+  if (task.parent_id !== undefined) lines.push(`  parent: ${task.parent_id}`)
+  if (task.workflow_run_id !== undefined)
+    lines.push(`  workflow_run: ${task.workflow_run_id}`)
+  if (task.wait_until !== undefined)
+    lines.push(`  wait_until: ${task.wait_until}`)
+  lines.push(`  created: ${task.created_at}`)
+  lines.push(`  updated: ${task.updated_at}`)
+  if (task.annotations.length > 0) {
+    lines.push("  annotations:")
+    for (const a of task.annotations) {
+      lines.push(`    - [${a.timestamp}] ${a.text}`)
+    }
+  }
+  return lines.join("\n")
+}
+
+export function formatNextTask(task: Task | null): string {
+  if (task === null) return "No ready tasks."
+  const tags = task.tags.length > 0 ? ` [${task.tags.join(", ")}]` : ""
+  return `${task.id}  ${task.description}${tags}`
 }
