@@ -80,7 +80,7 @@ export const taskListCommand: Command = async (ctx, _args, flags) => {
   const tasks = await adapter.listTasks(query)
   // Stable display order: ascending ULID (creation order)
   tasks.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
-  output(ctx, tasks, formatTasks)
+  output(ctx, tasks, (data) => formatTasks(data, ctx.wide))
 }
 
 export const taskNextCommand: Command = async (ctx, _args, flags) => {

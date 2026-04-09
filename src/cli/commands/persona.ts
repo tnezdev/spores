@@ -10,7 +10,7 @@ import { output } from "../main.js"
 
 export const personaListCommand: Command = async (ctx, _args, _flags) => {
   const refs = await listPersonas(ctx.baseDir)
-  output(ctx, refs, formatPersonaRefs)
+  output(ctx, refs, (data) => formatPersonaRefs(data, ctx.wide))
 }
 
 export const personaViewCommand: Command = async (ctx, args, _flags) => {

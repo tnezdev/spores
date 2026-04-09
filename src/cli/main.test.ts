@@ -531,5 +531,74 @@ The cwd is {{cwd}}.
       expect(exitCode).toBe(1)
       expect(stderr).toContain("Persona not found")
     })
+
+    it("list truncates long descriptions by default", async () => {
+      const longDesc = "A".repeat(80)
+      const content = `---\nname: verbose\ndescription: ${longDesc}\n---\n\nBody.\n`
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "verbose.md",
+        content,
+      )
+      const { stdout } = await runPersona(...base, "persona", "list")
+      expect(stdout).not.toContain(longDesc)
+      expect(stdout).toContain("…")
+    })
+
+    it("list --wide shows full descriptions", async () => {
+      const longDesc = "A".repeat(80)
+      const content = `---\nname: verbose\ndescription: ${longDesc}\n---\n\nBody.\n`
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "verbose.md",
+        content,
+      )
+      const { stdout } = await runPersona(...base, "--wide", "persona", "list")
+      expect(stdout).toContain(longDesc)
+    })
+  })
+
+  describe("--wide flag", () => {
+    it("skill list truncates long descriptions by default", async () => {
+      const longDesc = "B".repeat(80)
+      const skillDir = join(tmpDir, ".spores", "skills", "verbose")
+      await mkdir(skillDir, { recursive: true })
+      await writeFile(
+        join(skillDir, "skill.md"),
+        `---\nname: verbose\ndescription: ${longDesc}\ntags: []\n---\n\nContent.\n`,
+      )
+      const { stdout } = await run(...base, "skill", "list")
+      expect(stdout).not.toContain(longDesc)
+      expect(stdout).toContain("…")
+    })
+
+    it("skill list --wide shows full descriptions", async () => {
+      const longDesc = "B".repeat(80)
+      const skillDir = join(tmpDir, ".spores", "skills", "verbose")
+      await mkdir(skillDir, { recursive: true })
+      await writeFile(
+        join(skillDir, "skill.md"),
+        `---\nname: verbose\ndescription: ${longDesc}\ntags: []\n---\n\nContent.\n`,
+      )
+      const { stdout } = await run(...base, "--wide", "skill", "list")
+      expect(stdout).toContain(longDesc)
+    })
+
+    it("task list truncates long descriptions by default", async () => {
+      await run(...base, "init")
+      const longDesc = "C".repeat(80)
+      await run(...base, "task", "add", longDesc)
+      const { stdout } = await run(...base, "task", "list")
+      expect(stdout).not.toContain(longDesc)
+      expect(stdout).toContain("…")
+    })
+
+    it("task list --wide shows full descriptions", async () => {
+      await run(...base, "init")
+      const longDesc = "C".repeat(80)
+      await run(...base, "task", "add", longDesc)
+      const { stdout } = await run(...base, "--wide", "task", "list")
+      expect(stdout).toContain(longDesc)
+    })
   })
 })

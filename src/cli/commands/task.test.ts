@@ -29,6 +29,7 @@ function makeCtx(baseDir: string): Ctx {
     config,
     baseDir,
     json: true, // JSON mode keeps stdout structured & silent for humans
+    wide: false,
   }
 }
 
