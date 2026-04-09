@@ -1,93 +1,74 @@
 ---
 name: release-check
-description: Activate when cutting a new @tnezdev/spores release — verifies the green-gate checklist before tagging and publishing
-tags: [spores, release, npm]
+description: Activate when cutting a new @tnezdev/spores release — the CI-gated checklist for landing a version bump and triggering the tag publish
+tags: [spores, release, npm, ci]
 ---
 
 # Release check — @tnezdev/spores
 
-Before cutting a new version, every one of these must be green. If any step fails, **do not tag**. Fix the failure, commit, and restart the checklist.
+Releases are **CI-gated**. You don't run `npm publish`; you push a `vX.Y.Z` tag and `.github/workflows/publish.yml` does the rest via npm Trusted Publishing (OIDC). Your job is to land a clean version bump on `main` and hand the tag to CI.
 
-## 1. Clean working tree
+**The gate is CI. Do not publish locally.** There is no `NPM_TOKEN`; there is no path for a local `npm publish` to succeed. If you find yourself typing it, stop.
 
-```bash
-git status
-```
+## 1. Land the version bump on main
 
-Must show no uncommitted changes. If there are any, either commit them or stash them — do not publish with a dirty tree.
+Open a `chore: release vX.Y.Z` PR that:
 
-## 2. On main, up to date with remote
+- Bumps `version` in `package.json` per semver.
+- Appends a CHANGELOG entry (or release notes section) covering user-visible changes since the last tag.
+- Keeps `"dependencies": {}` in `package.json`. A non-empty production dependency is a design regression — investigate before shipping.
+
+Merge only after CI (`.github/workflows/ci.yml`) is green on the PR. CI runs `bun test` and `bun run typecheck` — those are the authoritative gates, not a local run.
+
+## 2. Sync and sanity-check main
 
 ```bash
 git checkout main && git pull
+git log -1 --oneline   # confirm the release commit is HEAD
 ```
 
-The commit you're about to tag must exist on `origin/main`. No releasing from feature branches.
+The commit you're about to tag must be the merged release commit on `origin/main`. No tagging from feature branches, no tagging ahead of merge.
 
-## 3. Tests green
-
-```bash
-bun test
-```
-
-**Every** test must pass. No skipped suites, no `.only`. If you see warnings about malformed fixtures (e.g. from test teardown), that's fine — just make sure the summary line reads `0 fail`.
-
-## 4. Typecheck clean
-
-```bash
-bun run typecheck
-```
-
-`tsc --noEmit` must exit 0. A type error is a release blocker, even if tests pass.
-
-## 5. Dependencies still zero
-
-```bash
-cat package.json | jq '.dependencies'
-```
-
-Must print `{}`. Any non-empty production dependency is a design regression — investigate before shipping.
-
-## 6. Package contents sanity check
-
-```bash
-npm pack --dry-run
-```
-
-Scan the file list. Should include `src/`, `package.json`, `README.md`, `AGENTS.md`. Should **not** include `.spores/runs/`, `node_modules/`, test files, or dotfiles that weren't intended.
-
-## 7. Version bump + CHANGELOG
-
-Edit `package.json` and bump `version` per semver. Append a CHANGELOG entry with the user-visible changes since the last tag. Commit as `chore: release vX.Y.Z`.
-
-## 8. Tag and push
+## 3. Tag and push
 
 ```bash
 git tag -a vX.Y.Z -m "vX.Y.Z"
-git push origin main --tags
+git push origin vX.Y.Z
 ```
 
-## 9. Publish
+The tag push is the trigger. `publish.yml` runs on `push: tags: [v*.*.*]` and takes over from here.
+
+## 4. Watch publish.yml run green
 
 ```bash
-npm publish --access public
+gh run watch --exit-status
+# or
+gh run list --workflow=publish.yml --limit 3
 ```
 
-**Pause here for Travis to run this step manually** — npm publish is not autonomous work. Provide him the exact command to run and the version string.
+What the workflow does (for context when reading logs):
 
-## 10. Verify
+1. Checkout + Bun + `bun install --frozen-lockfile`
+2. `bun run typecheck` and `bun test` (re-gate, cheap)
+3. Bootstraps npm 11 via direct tarball download (the runner's bundled npm has historically been corrupt on fresh `ubuntu-latest` images — don't "simplify" this step)
+4. `npm publish --provenance --access public` using OIDC — no token, no secret
+
+If the workflow fails:
+
+- **Do not delete the tag as a first move.** Investigate in the logs; most failures (flaky install, transient registry) are retryable via `gh run rerun`.
+- If the failure is real (bad code landed, version bump wrong), fix forward on `main` with a new patch version — `vX.Y.(Z+1)` — and a new tag. A published version is immutable; don't chase the old number.
+- Only delete-and-retag if the tag was pushed to the wrong commit *and nothing published*. Confirm with `npm view @tnezdev/spores versions` before retagging.
+
+## 5. Verify the registry
 
 ```bash
 npm view @tnezdev/spores version
 ```
 
-Should print the just-published version. If it doesn't, wait 30 seconds and retry — npm registry propagation.
+Should print the version you just tagged. If it lags, wait 30 seconds and retry — npm registry propagation.
 
-## On failure
+Also spot-check provenance on https://www.npmjs.com/package/@tnezdev/spores — the published version should show a "Built and signed on GitHub Actions" badge linking back to the workflow run. That badge is the whole point of OIDC; its absence means provenance attestation didn't attach and is worth investigating.
 
-If any step fails:
+## On failure — general rule
 
-- **Do not tag.** A tag is durable; an unpublished bug isn't.
-- Fix the underlying issue on a branch.
-- Open a PR, review, merge, then restart this checklist from step 1.
-- Never publish a version with known failing tests or broken types.
+A failed publish run does not mean "roll back." It means "the tag did not ship a package." The main branch is still the source of truth. Fix forward, bump patch, retag. Never rewrite history on `main` to "unship" a tag that CI caught.

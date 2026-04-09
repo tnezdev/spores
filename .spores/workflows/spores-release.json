@@ -1,97 +1,44 @@
 {
   "id": "spores-release",
   "name": "Spores release cut",
-  "description": "End-to-end workflow for cutting a new @tnezdev/spores version",
-  "version": "1.0",
+  "description": "CI-gated release flow for @tnezdev/spores — land version bump on main, push tag, let publish.yml ship via OIDC trusted publishing",
+  "version": "2.0",
   "nodes": [
     {
-      "id": "verify-clean",
-      "label": "Verify clean working tree",
-      "description": "git status shows no uncommitted changes; on main; up to date with origin",
-      "artifact_type": "git-status"
+      "id": "version-bump-pr",
+      "label": "Open release PR",
+      "description": "Bump package.json version per semver, append CHANGELOG entry, open 'chore: release vX.Y.Z' PR — merge only when CI is green",
+      "artifact_type": "pull-request"
     },
     {
-      "id": "run-tests",
-      "label": "Run full test suite",
-      "description": "bun test — all green, no failures, no skipped suites",
-      "artifact_type": "test-report"
-    },
-    {
-      "id": "typecheck",
-      "label": "Run typecheck",
-      "description": "bun run typecheck — tsc --noEmit exits 0",
-      "artifact_type": "typecheck-report"
-    },
-    {
-      "id": "dep-audit",
-      "label": "Verify zero production dependencies",
-      "description": "package.json dependencies field is empty object",
-      "artifact_type": "package-json"
-    },
-    {
-      "id": "pack-dry-run",
-      "label": "Pack dry run",
-      "description": "npm pack --dry-run — scan contents for unwanted files",
-      "artifact_type": "pack-manifest"
-    },
-    {
-      "id": "version-bump",
-      "label": "Bump version and write CHANGELOG",
-      "description": "Edit package.json version per semver; append CHANGELOG entry; commit",
-      "artifact_type": "commit"
+      "id": "sync-main",
+      "label": "Sync main and confirm release commit",
+      "description": "git checkout main && git pull; git log -1 must show the merged release commit",
+      "artifact_type": "git-ref"
     },
     {
       "id": "tag-push",
       "label": "Tag and push",
-      "description": "git tag -a vX.Y.Z -m 'vX.Y.Z' && git push --tags",
+      "description": "git tag -a vX.Y.Z -m 'vX.Y.Z' && git push origin vX.Y.Z — this is the trigger for publish.yml",
       "artifact_type": "git-tag"
     },
     {
-      "id": "publish",
-      "label": "Publish to npm",
-      "description": "npm publish --access public — pause for Travis to run manually",
-      "type": "manual",
-      "artifact_type": "npm-publish"
+      "id": "watch-publish-ci",
+      "label": "Watch publish.yml run",
+      "description": "gh run watch --exit-status — publish.yml runs typecheck+test, bootstraps npm 11 via tarball, publishes with OIDC + provenance. No local publish.",
+      "artifact_type": "ci-run"
     },
     {
-      "id": "verify-published",
-      "label": "Verify registry",
-      "description": "npm view @tnezdev/spores version matches the tag just cut",
+      "id": "verify-registry",
+      "label": "Verify registry + provenance",
+      "description": "npm view @tnezdev/spores version matches tag; npmjs.com page shows 'Built and signed on GitHub Actions' provenance badge",
       "artifact_type": "registry-check"
     }
   ],
   "edges": [
-    {
-      "from": "verify-clean",
-      "to": "run-tests"
-    },
-    {
-      "from": "run-tests",
-      "to": "typecheck"
-    },
-    {
-      "from": "typecheck",
-      "to": "dep-audit"
-    },
-    {
-      "from": "dep-audit",
-      "to": "pack-dry-run"
-    },
-    {
-      "from": "pack-dry-run",
-      "to": "version-bump"
-    },
-    {
-      "from": "version-bump",
-      "to": "tag-push"
-    },
-    {
-      "from": "tag-push",
-      "to": "publish"
-    },
-    {
-      "from": "publish",
-      "to": "verify-published"
-    }
+    { "from": "version-bump-pr", "to": "sync-main" },
+    { "from": "sync-main", "to": "tag-push" },
+    { "from": "tag-push", "to": "watch-publish-ci" },
+    { "from": "watch-publish-ci", "to": "verify-registry" }
   ]
 }

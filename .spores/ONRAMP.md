@@ -31,7 +31,7 @@ Returns the highest-ULID `ready` task from `.spores/tasks/`. **Important:** the 
 
 ### `skill run release-check`
 
-The pre-release checklist. Currently written for a manual publish flow — **known stale**, pending first successful CI publish. See "Known drift" below.
+The CI-gated release checklist. Your job is to land a `chore: release vX.Y.Z` PR on `main`, tag the merge commit `vX.Y.Z`, push the tag, and watch `publish.yml` ship via OIDC trusted publishing. No local `npm publish`.
 
 ## Source of truth — what lives where
 
@@ -42,17 +42,13 @@ The pre-release checklist. Currently written for a manual publish flow — **kno
 | Current task you're working | `.spores/tasks/*.json` (manually mirrored from GH) | Exercised by `spores task next` as part of the dogfood |
 | Durable non-obvious facts | `.spores/memory/*.json` | "Why" that isn't in the code |
 | Values and in-turn orientation | `.spores/personas/spores-maintainer.md` | What you prioritize while wearing the hat |
-| Release procedure | `.spores/skills/release-check/skill.md` + `.spores/workflows/spores-release.json` | Both currently stale — see below |
+| Release procedure | `.spores/skills/release-check/skill.md` + `.spores/workflows/spores-release.json` | CI-gated via `.github/workflows/publish.yml` (OIDC) |
 
 When two sources disagree, trust git and GitHub. Update the dogfood to match — that's the "dogfood as operational workspace, not curated fixture" stance.
 
 ## Known drift (refresh as you use it)
 
 This section is a living punch list. If you fix something, delete the bullet.
-
-- **`skills/release-check/skill.md`** is a manual-publish checklist. The real flow is now CI-driven: merge to main → tag `v*.*.*` → publish.yml runs. Update this skill to a ~4-step CI-gate checklist *after* the first successful CI publish lands (v0.1.1, expected soon). Don't theorize — update from lived experience.
-
-- **`workflows/spores-release.json`** is a 9-node manual-publish DAG. Same story: update after first CI publish. Likely shrinks to 3-4 nodes or gets replaced with a "verify-ci-green" gate.
 
 - **`tasks/` sync with GitHub issues is manual.** When you add a ready issue, seed a matching task file. When you close a GH issue, mark the task done. This is a bandaid — the real fix is a TaskAdapter that reads from GitHub issues directly (filed as a v0.2+ issue). Until then, keep them in hand-sync.
 
