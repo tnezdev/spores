@@ -4,22 +4,15 @@ Orientation for agent sessions. Concise. Read before touching code.
 
 ## What is SPORES?
 
-A TypeScript library + CLI for agent in-loop primitives. Four things:
+A TypeScript library + CLI for agent in-loop primitives. Four things, focused by a fifth:
 
 1. **Memory** — remember/recall/dream with L1/L2/L3 tiers
 2. **Skills** — load and run skill.md files from `.spores/skills/`
 3. **Workflow** — digraph runtime (GraphDef → Run → Transitions, state derived from history)
 4. **Tasks** — typed adapter interface (ULID IDs, Taskwarrior-shaped)
+5. **Persona** — activate a hat at the start of a turn: metadata (memory_tags, skills, task_filter, workflow) + a rendered body with live situational facts. Declarative attention, not enforced scope.
 
-MVP scope = what an agent reaches for *inside a single turn*. No hosting, no webhooks, no session layer — those are daemon-level concerns.
-
-## Current state
-
-- M1 shipped: init + memory (filesystem adapter)
-- #2 shipped: workflow digraph runtime (types, expand, runtime, filesystem adapter, CLI commands)
-- #3 shipped: skills module (filesystem loader, CLI: `skill list/show/run`)
-- #6 shipped: tasks interface (types + `TaskAdapter` stub, no implementation)
-- Open: #4 (persona), #5 (this file, will close on merge)
+MVP scope = what an agent reaches for *inside a single turn*. No hosting, no webhooks, no session layer — those are daemon-level concerns. **Identity lives outside spores** — in the run orchestration layer. Spores provides the hat; the caller provides who's wearing it.
 
 ## Tech stack
 
@@ -50,6 +43,7 @@ Every primitive has an interface in `src/<module>/adapter.ts`. Filesystem implem
 | memory | implicit in filesystem.ts | `src/memory/filesystem.ts` |
 | workflow | `WorkflowAdapter` | `src/workflow/filesystem.ts` |
 | tasks | `TaskAdapter` | `src/tasks/adapter.ts` (stub only) |
+| personas | `PersonaAdapter` | `src/personas/filesystem.ts` |
 
 ### CLI: two-word dispatch
 
@@ -64,6 +58,7 @@ Current command surface:
 - `spores memory remember/recall/forget/dream/reinforce`
 - `spores skill list/show/run`
 - `spores workflow list/show/run/status`
+- `spores persona list/view/activate`
 
 ### Skills on disk
 
@@ -74,6 +69,19 @@ Current command surface:
 
 Frontmatter: `name`, `description`, `tags: [a, b, c]`
 Body: the skill content returned by `skill run` (pipe to an LLM).
+
+### Personas on disk
+
+```
+~/.spores/personas/<name>.md         # global (user-level)
+.spores/personas/<name>.md           # project-level (wins on name conflict)
+```
+
+Flat-file layout (unlike skills which use a directory per skill). Frontmatter: `name`, `description`, `memory_tags: [...]`, `skills: [...]`, optional `task_filter: { tags: [...], status: ready }` (nested, one level deep), optional `workflow: <graph-id>`. Body is markdown with `{{cwd}}`, `{{timestamp}}`, `{{hostname}}`, `{{git_branch}}` tokens that get substituted at `persona activate` time.
+
+**`view` vs `activate`** is load-bearing: `view` prints the raw file with literal tokens (for humans editing or reviewing); `activate` substitutes live situational facts (for piping into an LLM). Don't let them produce identical output.
+
+**One hat at a time.** Personas don't compose, stack, or inherit. To pivot, deactivate one and activate another. Runtime integration for applying persona bindings (using `memory_tags` as a recall filter, etc.) is **the caller's responsibility** — spores ships the metadata, the caller wires it. Descoped from v0.1 intentionally; expected to land after we have more signal from actual use.
 
 ### Config resolution (three-tier)
 
@@ -99,6 +107,7 @@ Body: the skill content returned by `skill run` (pipe to an LLM).
 - IDs: ULIDs via monotonic factory (see tasks types)
 - Error handling: functions throw on unexpected errors; return `undefined` for "not found" cases (e.g. `loadSkill` returns `undefined` when skill doesn't exist)
 - No `console.log` in library code — CLI output goes through `output(ctx, data, formatter)` in `src/cli/main.ts`
+- **Descriptions are agent-facing activation triggers, not labels.** For both skills and personas, phrase `description` as "Activate when..." rather than "The X maintainer". `list` output is meant to function as a lookup table an agent scans to decide what to reach for — good triggers make the scan useful.
 
 ## What NOT to add
 

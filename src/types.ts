@@ -178,3 +178,57 @@ export type TaskQuery = {
   tags?: string[] | undefined
   parent_id?: string | undefined
 }
+
+// ---------------------------------------------------------------------------
+// Persona types
+// ---------------------------------------------------------------------------
+
+/**
+ * Situational facts resolved at activation time, substituted into a
+ * persona body via `{{key}}` tokens. v0.1 is static-only — no command
+ * execution, no API calls. Bodies needing richer context should instruct
+ * the agent to gather it in prose.
+ */
+export type SituationalContext = {
+  cwd: string
+  timestamp: string // ISO 8601
+  hostname: string
+  git_branch?: string | undefined
+}
+
+/**
+ * Metadata-only persona reference — cheap to list. Frontmatter fields only,
+ * no body content. Used by `listPersonas()` and by callers scanning the
+ * persona catalog for activation targets.
+ *
+ * Descriptions should be phrased as activation triggers ("Activate when...")
+ * rather than labels ("The X maintainer") — they're agent-facing lookup hooks.
+ */
+export type PersonaRef = {
+  name: string
+  description: string
+  memory_tags: string[]
+  skills: string[]
+  task_filter?: TaskQuery | undefined
+  workflow?: string | undefined
+}
+
+/**
+ * A persona as it exists on disk: metadata + raw body with unsubstituted
+ * `{{template}}` tokens. Returned by `loadPersona()`. Pair with
+ * `activatePersona(file, situational)` to produce a fully rendered `Persona`.
+ */
+export type PersonaFile = PersonaRef & {
+  body: string
+  path: string // absolute path to persona file
+}
+
+/**
+ * A fully activated persona — template tokens replaced with live situational
+ * facts. This is what gets piped into an LLM as focus context.
+ */
+export type Persona = PersonaRef & {
+  body: string // rendered: `{{key}}` tokens substituted
+  situational: SituationalContext
+  path: string
+}
