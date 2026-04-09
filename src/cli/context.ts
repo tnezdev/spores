@@ -6,6 +6,7 @@ export type Ctx = {
   config: SporesConfig
   baseDir: string
   json: boolean
+  wide: boolean
 }
 
 export type Command = (

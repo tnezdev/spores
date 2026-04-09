@@ -5,7 +5,7 @@ import { output } from "../main.js"
 
 export const skillListCommand: Command = async (ctx, _args, _flags) => {
   const skills = await listSkills(ctx.baseDir)
-  output(ctx, skills, formatSkillRefs)
+  output(ctx, skills, (data) => formatSkillRefs(data, ctx.wide))
 }
 
 export const skillShowCommand: Command = async (ctx, args, _flags) => {

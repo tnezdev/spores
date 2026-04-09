@@ -49,6 +49,10 @@ export function formatDreamResult(r: DreamResult): string {
 // Workflow formatters
 // ---------------------------------------------------------------------------
 
+function trunc(s: string, max = 60): string {
+  return s.length > max ? s.slice(0, max - 1) + "…" : s
+}
+
 function table(headers: string[], rows: string[][]): string {
   const widths = headers.map((h, i) =>
     Math.max(h.length, ...rows.map((r) => (r[i] ?? "").length)),
@@ -114,11 +118,11 @@ export function formatHistory(transitions: Transition[]): string {
 // Skill formatters
 // ---------------------------------------------------------------------------
 
-export function formatSkillRefs(refs: SkillRef[]): string {
+export function formatSkillRefs(refs: SkillRef[], wide = false): string {
   if (refs.length === 0) return "No skills found."
   return table(
     ["NAME", "DESCRIPTION", "TAGS"],
-    refs.map((r) => [r.name, r.description, r.tags.join(", ")]),
+    refs.map((r) => [r.name, wide ? r.description : trunc(r.description), r.tags.join(", ")]),
   )
 }
 
@@ -133,7 +137,7 @@ export function formatSkill(skill: Skill): string {
 // Task formatters
 // ---------------------------------------------------------------------------
 
-export function formatTasks(tasks: Task[]): string {
+export function formatTasks(tasks: Task[], wide = false): string {
   if (tasks.length === 0) return "No tasks."
   return table(
     ["ID", "STATUS", "TAGS", "DESCRIPTION"],
@@ -141,7 +145,7 @@ export function formatTasks(tasks: Task[]): string {
       t.id,
       t.status,
       t.tags.join(","),
-      t.description,
+      wide ? t.description : trunc(t.description),
     ]),
   )
 }
@@ -177,11 +181,11 @@ export function formatNextTask(task: Task | null): string {
 // Persona formatters
 // ---------------------------------------------------------------------------
 
-export function formatPersonaRefs(refs: PersonaRef[]): string {
+export function formatPersonaRefs(refs: PersonaRef[], wide = false): string {
   if (refs.length === 0) return "No personas found."
   return table(
     ["NAME", "DESCRIPTION"],
-    refs.map((r) => [r.name, r.description]),
+    refs.map((r) => [r.name, wide ? r.description : trunc(r.description)]),
   )
 }
 

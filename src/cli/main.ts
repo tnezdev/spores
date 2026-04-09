@@ -49,7 +49,7 @@ type Parsed = {
   flags: Record<string, string | true>
 }
 
-const BOOLEAN_FLAGS = new Set(["json", "dry-run", "help"])
+const BOOLEAN_FLAGS = new Set(["json", "dry-run", "help", "wide"])
 
 function parseArgs(argv: string[]): Parsed {
   const positional: string[] = []
@@ -150,6 +150,7 @@ Commands:
 
 Flags:
   --json                              Output as JSON
+  --wide                              Disable column truncation in list output
   --base-dir <path>                   Override working directory
   --identity <name>                   Override identity for transitions
   --reason <text>                     Reason for done/fail transitions
@@ -166,9 +167,10 @@ async function main() {
   const baseDir =
     typeof flags["base-dir"] === "string" ? flags["base-dir"] : process.cwd()
   const json = flags["json"] === true
+  const wide = flags["wide"] === true
   const config = await loadConfig(baseDir)
   const adapter = new FilesystemAdapter(baseDir)
-  const ctx: Ctx = { adapter, config, baseDir, json }
+  const ctx: Ctx = { adapter, config, baseDir, json, wide }
 
   const twoWord = `${positional[0]} ${positional[1]}`
   const oneWord = positional[0]!
