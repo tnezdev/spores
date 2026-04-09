@@ -2,8 +2,9 @@
 
 import { loadConfig } from "../config.js"
 import { FilesystemAdapter } from "../memory/filesystem.js"
-import type { MemoryAdapter } from "../memory/adapter.js"
-import type { SporesConfig } from "../types.js"
+import type { Ctx, Command } from "./context.js"
+export type { Ctx, Command } from "./context.js"
+export { output } from "./output.js"
 import { initCommand } from "./commands/init.js"
 import {
   rememberCommand,
@@ -29,19 +30,14 @@ import {
   skillShowCommand,
   skillRunCommand,
 } from "./commands/skill.js"
-
-export type Ctx = {
-  adapter: MemoryAdapter
-  config: SporesConfig
-  baseDir: string
-  json: boolean
-}
-
-export type Command = (
-  ctx: Ctx,
-  args: string[],
-  flags: Record<string, string | true>,
-) => Promise<void>
+import {
+  taskAddCommand,
+  taskListCommand,
+  taskNextCommand,
+  taskShowCommand,
+  taskDoneCommand,
+  taskAnnotateCommand,
+} from "./commands/task.js"
 
 type Parsed = {
   positional: string[]
@@ -99,6 +95,12 @@ const commands: Record<string, Command> = {
   "skill list": skillListCommand,
   "skill show": skillShowCommand,
   "skill run": skillRunCommand,
+  "task add": taskAddCommand,
+  "task list": taskListCommand,
+  "task next": taskNextCommand,
+  "task show": taskShowCommand,
+  "task done": taskDoneCommand,
+  "task annotate": taskAnnotateCommand,
 }
 
 const USAGE = `Usage: spores <command> [args] [flags]
@@ -127,24 +129,19 @@ Commands:
   skill show <name>                   Show skill details and content
   skill run <name>                    Output skill prompt (pipe to LLM)
 
+  task add <description>              Create a new ready task
+  task list                           List tasks (filter with flags)
+  task next                           Show the next ready task
+  task show <id>                      Show task details + annotations
+  task done <id>                      Mark a task done
+  task annotate <id> <text>           Append an annotation to a task
+
 Flags:
   --json                              Output as JSON
   --base-dir <path>                   Override working directory
   --identity <name>                   Override identity for transitions
   --reason <text>                     Reason for done/fail transitions
   --name <text>                       Name for a new run`
-
-export function output<T>(
-  ctx: Ctx,
-  data: T,
-  humanFn: (data: T) => string,
-): void {
-  if (ctx.json) {
-    console.log(JSON.stringify(data, null, 2))
-  } else {
-    console.log(humanFn(data))
-  }
-}
 
 async function main() {
   const { positional, flags } = parseArgs(process.argv.slice(2))

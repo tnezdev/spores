@@ -41,3 +41,4 @@ export { loadConfig } from "./config.js"
 export { listSkills, loadSkill } from "./skills/filesystem.js"
 
 export type { TaskAdapter } from "./tasks/adapter.js"
+export { FilesystemTaskAdapter } from "./tasks/filesystem.js"
