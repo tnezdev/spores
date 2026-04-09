@@ -1,13 +1,18 @@
 {
   "description": "Land #18 — CLI --wide flag for table truncation",
-  "status": "ready",
+  "status": "done",
   "tags": [
     "spores",
     "v0.1.1",
     "cli"
   ],
   "id": "01KNS2YM2Q3HBK7QQVM6GDK962",
-  "annotations": [],
+  "annotations": [
+    {
+      "text": "status: ready → done",
+      "timestamp": "2026-04-09T13:16:40.666Z"
+    }
+  ],
   "created_at": "2026-04-09T12:19:56.631Z",
-  "updated_at": "2026-04-09T12:19:56.631Z"
+  "updated_at": "2026-04-09T13:16:40.666Z"
 }

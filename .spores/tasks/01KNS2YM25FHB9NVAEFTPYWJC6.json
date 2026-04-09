@@ -1,13 +1,18 @@
 {
   "description": "Land #17 — add user-facing README.md",
-  "status": "ready",
+  "status": "done",
   "tags": [
     "spores",
     "v0.1.1",
     "docs"
   ],
   "id": "01KNS2YM25FHB9NVAEFTPYWJC6",
-  "annotations": [],
+  "annotations": [
+    {
+      "text": "status: ready → done",
+      "timestamp": "2026-04-09T13:16:40.647Z"
+    }
+  ],
   "created_at": "2026-04-09T12:19:56.613Z",
-  "updated_at": "2026-04-09T12:19:56.613Z"
+  "updated_at": "2026-04-09T13:16:40.647Z"
 }
