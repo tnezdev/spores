@@ -1,0 +1,12 @@
+{
+  "key": "hooks-system-v0-bookmark",
+  "content": "Hook system v0 shipped in #28 with persona.activated only — fires after persona render, dogfood handler recalls memories by persona memory_tags (this is how you're reading this). Design + event catalog + status checklist: tnezdev/spores#26. Next events on deck: task.done (cheapest, wire to memory.remember) and workflow.run.terminated (highest-value, wire to a session-wrap skill). fireHook lives at src/hooks/fire.ts — its clearTimeout trap is documented in the source, don't re-discover it.",
+  "weight": 0.5,
+  "confidence": 1,
+  "tier": "L1",
+  "tags": [
+    "spores",
+    "hooks"
+  ],
+  "timestamp": "2026-04-09T21:59:17.121Z"
+}
