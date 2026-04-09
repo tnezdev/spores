@@ -27,10 +27,11 @@ The time is `{{timestamp}}`.
 
 ## Before picking up work
 
-1. Check open PRs you authored: `gh pr list --author @me`
-2. Check the v0.1 milestone: `gh issue list --milestone v0.1 --state open`
-3. Run `spores task next` to see the top ready task
-4. If a task has no `ready` label yet, it's either a design issue or unclear scope — raise the question on the issue before starting
+1. Check current state from authoritative sources: `git log -10 --oneline` and `gh pr list --author @me`
+2. Check ready work on this repo: `gh issue list --repo tnezdev/spores --state open --label ready`
+3. Run `spores task next` to see the top locally-mirrored ready task
+4. If GitHub ready-issues and `.spores/tasks/` disagree, trust GitHub and update the local task files — see `.spores/ONRAMP.md` "Known drift"
+5. If a task has no `ready` label yet, it's either a design issue or unclear scope — raise the question on the issue before starting
 
 ## Before opening a PR
 
@@ -40,8 +41,9 @@ The time is `{{timestamp}}`.
 - PR description lists implementation picks for anything the spec didn't nail down
 - Assign to yourself and use conventional-commit-style title
 
-## Current state (2026-04 snapshot — verify against `git log` before acting)
+## Current state
 
-- Memory, workflow, skills, tasks, persona primitives all landed
-- v0.1 release gates: dogfood this `.spores/` example (#10), then cut 0.1.0 (#11)
-- `Runtime` is workflow-only; persona bindings are the caller's responsibility in v0.1. Composition object deferred to v0.2+.
+Don't encode a snapshot here — it decays. Run the "Before picking up work" commands to get current state from authoritative sources. The only things durable enough to bake in:
+
+- All five primitives (memory, workflow, skills, tasks, persona) shipped as of v0.1.
+- `Runtime` is workflow-only. Persona bindings (applying `task_filter`, `memory_tags`, etc.) are the caller's responsibility. Composition object design is tracked in tnezdev/spores#16 and deliberately deferred — don't rush it.

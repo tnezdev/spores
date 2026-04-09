@@ -1,12 +1,17 @@
 {
   "description": "Verify dogfood .spores/ example exercises all four primitives end-to-end",
-  "status": "ready",
+  "status": "done",
   "tags": [
     "spores",
     "v0.1"
   ],
   "id": "01KNRZBRHZZ3R8TMQFY32VW18B",
-  "annotations": [],
+  "annotations": [
+    {
+      "text": "status: ready → done",
+      "timestamp": "2026-04-09T12:19:48.886Z"
+    }
+  ],
   "created_at": "2026-04-09T11:17:12.895Z",
-  "updated_at": "2026-04-09T11:17:12.895Z"
+  "updated_at": "2026-04-09T12:19:48.886Z"
 }
