@@ -37,9 +37,14 @@ jobs:
           registry-url: "https://registry.npmjs.org"
 
       # Trusted publishing requires npm >= 11.5.1.
-      # Node 22 ships with an older npm; bump before publishing.
-      - name: Upgrade npm
-        run: npm install -g npm@latest
+      # Bootstrap npm 11 via direct tarball download — avoids using the
+      # runner's bundled npm (which can be corrupt on fresh ubuntu-latest images).
+      - name: Bootstrap npm 11
+        run: |
+          TMP=$(mktemp -d)
+          curl -fsSL https://registry.npmjs.org/npm/-/npm-11.5.1.tgz | tar -xz --strip-components=1 -C "$TMP"
+          node "$TMP/bin/npm-cli.js" install -g "$TMP"
+          npm --version
 
       - name: Publish
         run: npm publish --provenance --access public
