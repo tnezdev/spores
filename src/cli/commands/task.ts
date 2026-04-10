@@ -1,8 +1,9 @@
-import type { Task, TaskQuery, TaskStatus } from "../../types.js"
+import type { Task, TaskQuery, TaskStatus, TaskDoneOutput } from "../../types.js"
 import { FilesystemTaskAdapter } from "../../tasks/filesystem.js"
+import { fireHook } from "../../hooks/fire.js"
 import type { Command } from "../context.js"
 import { output } from "../output.js"
-import { formatTask, formatTasks, formatNextTask } from "../format.js"
+import { formatTask, formatTasks, formatNextTask, formatTaskDone } from "../format.js"
 
 const VALID_STATUSES = new Set<TaskStatus>([
   "ready",
@@ -111,7 +112,37 @@ export const taskDoneCommand: Command = async (ctx, args, _flags) => {
 
   const adapter = new FilesystemTaskAdapter(ctx.baseDir)
   const task: Task = await adapter.updateTaskStatus(id, "done")
-  output(ctx, task, formatTask)
+
+  // Fire the task.done event. Hook stdout is appended to the rendered body in
+  // human mode, and to the wrapper object in JSON mode.
+  // Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "task.done",
+    {
+      SPORES_TASK_ID: task.id,
+      SPORES_TASK_DESCRIPTION: task.description,
+      SPORES_TASK_TAGS: task.tags.join(","),
+      SPORES_TASK_PARENT_ID: task.parent_id ?? "",
+    },
+    ctx.baseDir,
+  )
+
+  const result: TaskDoneOutput = {
+    task,
+    hook: hook.ran ? hook : undefined,
+  }
+  output(ctx, result, formatTaskDone)
+
+  if (hook.ran) {
+    if (hook.stderr.length > 0) {
+      process.stderr.write(hook.stderr)
+    }
+    if (hook.error !== undefined) {
+      process.stderr.write(`[hook warning] task.done: ${hook.error}\n`)
+    } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] task.done exited ${hook.exit_code}\n`)
+    }
+  }
 }
 
 export const taskAnnotateCommand: Command = async (ctx, args, _flags) => {

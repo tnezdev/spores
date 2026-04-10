@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+#
+# .spores/hooks/task.done
+#
+# Fires after `spores task done <id>` has marked the task complete.
+# Records the completed task to memory so it's searchable via recall.
+# This is the v0 realization of the task.done hook (tnezdev/spores#26).
+#
+# Contract — env vars set by spores:
+#   SPORES_EVENT            = "task.done"
+#   SPORES_BIN              = path to the spores CLI entry (for callbacks)
+#   SPORES_TASK_ID          = the task ULID
+#   SPORES_TASK_DESCRIPTION = the task description
+#   SPORES_TASK_TAGS        = comma-separated tags (may be empty)
+#   SPORES_TASK_PARENT_ID   = parent task ULID (may be empty)
+#
+# Stdout from this script is appended to the task done output.
+# Non-zero exit is surfaced as a warning — it does not fail the task update.
+
+set -euo pipefail
+
+ID="${SPORES_TASK_ID:-}"
+DESC="${SPORES_TASK_DESCRIPTION:-}"
+TAGS="${SPORES_TASK_TAGS:-}"
+
+# Exit quietly if no task info to work with
+[[ -z "$ID" ]] && exit 0
+[[ -z "$DESC" ]] && exit 0
+
+# Build memory content from task data
+CONTENT="Completed: ${DESC}"
+[[ -n "$TAGS" ]] && CONTENT="${CONTENT} (tags: ${TAGS})"
+
+# SPORES_BIN may be a path to main.ts (dev) or the installed `spores` binary.
+if [[ "$SPORES_BIN" == *.ts ]]; then
+  invoke() { bun "$SPORES_BIN" "$@"; }
+else
+  invoke() { "$SPORES_BIN" "$@"; }
+fi
+
+# Store with a stable key (task-done:<id>) so re-running doesn't create dupes
+invoke memory remember "$CONTENT" \
+  --key "task-done:${ID}" \
+  --tags "task-done" \
+  --tier L1 || true

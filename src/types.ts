@@ -263,3 +263,13 @@ export type PersonaActivationOutput = {
   persona: Persona
   hook?: HookInvocation | undefined
 }
+
+/**
+ * Output of `task done`: the updated task plus the result of any `task.done`
+ * hook that fired. The hook's stdout is appended to the human-formatted output;
+ * JSON mode serializes the whole wrapper. Design + catalog: tnezdev/spores#26.
+ */
+export type TaskDoneOutput = {
+  task: Task
+  hook?: HookInvocation | undefined
+}

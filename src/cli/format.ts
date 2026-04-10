@@ -11,6 +11,7 @@ import type {
   Task,
   Persona,
   PersonaActivationOutput,
+  TaskDoneOutput,
   PersonaFile,
   PersonaRef,
 } from "../types.js"
@@ -176,6 +177,21 @@ export function formatNextTask(task: Task | null): string {
   if (task === null) return "No ready tasks."
   const tags = task.tags.length > 0 ? ` [${task.tags.join(", ")}]` : ""
   return `${task.id}  ${task.description}${tags}`
+}
+
+/**
+ * Human formatter for `task done`: the task details followed by the stdout of
+ * a `task.done` hook if one ran and produced output. JSON mode serializes the
+ * whole wrapper structurally.
+ */
+export function formatTaskDone(result: TaskDoneOutput): string {
+  const parts = [formatTask(result.task)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
 }
 
 // ---------------------------------------------------------------------------
