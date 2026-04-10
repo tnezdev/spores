@@ -2,6 +2,29 @@
 
 All notable changes to `@tnezdev/spores`. Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [semver](https://semver.org/).
 
+## 0.2.0 — 2026-04-10
+
+### Added
+
+- **Hook system** — fire-and-observe events from every spores primitive. Hooks are executable scripts at `.spores/hooks/<event>` (project) or `~/.spores/hooks/<event>` (user), resolved first-match-wins with exec-bit gating. 5-second timeout with race-and-kill semantics. Eight event categories shipped:
+  - `persona.activated` — fires after persona activation
+  - `skill.invoked` — fires after skill run
+  - `memory.remembered`, `memory.recalled`, `memory.reinforced`, `memory.dreamed`, `memory.forgotten` — fires after each memory verb
+  - `task.added`, `task.started`, `task.annotated`, `task.done` — fires after each task verb
+  - `workflow.run.started`, `workflow.run.transitioned`, `workflow.run.terminated` — fires after workflow state changes
+- **`fireHook` public API** — exported from `src/index.ts` alongside the `HookInvocation` type, so consumers (e.g. Beacon) can fire hooks from their own runtimes.
+- **Pre-publish smoke test** — `scripts/smoke-test.sh` packs the tarball, installs it in a temp directory, and verifies all public API exports are importable under Bun. Runs in CI between tests and publish.
+- **`smoke-test` skill** — documents and surfaces the smoke test for manual use.
+
+### Fixed
+
+- Cleaned stale `hooks-system-v0-bookmark` memory that was misleading auto-recall after #26 closed.
+
+### Notes
+
+- **Bun-only.** Node.js cannot consume the published package (raw `.ts` in `node_modules`). This is an intentional constraint for v0.2; Node support is tracked in #32.
+- The release workflow (`spores-release`) and release-check skill were rewritten for CI-gated flow in this cycle.
+
 ## 0.1.0 — 2026-04-09
 
 First published release. **Coherent primitives MVP** — five in-loop primitives that an agent reaches for during a single turn, composable via a persona but with no enforced composition layer yet.
