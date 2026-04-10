@@ -261,7 +261,7 @@ describe("CLI", () => {
       await run(...base, "init")
 
       // Remember
-      const mem = (await runJson(
+      const remembered = (await runJson(
         ...base,
         "memory",
         "remember",
@@ -272,23 +272,23 @@ describe("CLI", () => {
         "foo,bar",
         "--key",
         "test-key",
-      )) as { key: string; content: string; weight: number; tags: string[] }
+      )) as { memory: { key: string; content: string; weight: number; tags: string[] } }
 
-      expect(mem.key).toBe("test-key")
-      expect(mem.content).toBe("test content")
-      expect(mem.weight).toBe(0.8)
-      expect(mem.tags).toEqual(["foo", "bar"])
+      expect(remembered.memory.key).toBe("test-key")
+      expect(remembered.memory.content).toBe("test content")
+      expect(remembered.memory.weight).toBe(0.8)
+      expect(remembered.memory.tags).toEqual(["foo", "bar"])
 
       // Recall
-      const results = (await runJson(
+      const recalled = (await runJson(
         ...base,
         "memory",
         "recall",
         "test",
-      )) as Array<{ memory: { key: string }; score: number }>
+      )) as { results: Array<{ memory: { key: string }; score: number }> }
 
-      expect(results.length).toBe(1)
-      expect(results[0]!.memory.key).toBe("test-key")
+      expect(recalled.results.length).toBe(1)
+      expect(recalled.results[0]!.memory.key).toBe("test-key")
     })
 
     it("reinforce bumps confidence", async () => {
@@ -309,10 +309,10 @@ describe("CLI", () => {
         "memory",
         "reinforce",
         "r-key",
-      )) as { key: string; confidence: number }
+      )) as { memory: { key: string; confidence: number } }
 
-      expect(result.key).toBe("r-key")
-      expect(result.confidence).toBe(1) // already at max
+      expect(result.memory.key).toBe("r-key")
+      expect(result.memory.confidence).toBe(1) // already at max
     })
 
     it("reinforce fails on unknown key", async () => {
@@ -341,13 +341,13 @@ describe("CLI", () => {
       expect(exitCode).toBe(0)
 
       // Recall should find nothing
-      const results = (await runJson(
+      const recalled = (await runJson(
         ...base,
         "memory",
         "recall",
         "to forget",
-      )) as Array<unknown>
-      expect(results.length).toBe(0)
+      )) as { results: Array<unknown> }
+      expect(recalled.results.length).toBe(0)
     })
 
     it("forget fails on unknown key", async () => {
@@ -379,18 +379,18 @@ describe("CLI", () => {
         "memory",
         "dream",
         "--dry-run",
-      )) as { promoted: string[]; pruned: string[] }
+      )) as { result: { promoted: string[]; pruned: string[] } }
 
-      expect(dreamResult.promoted).toContain("d-key")
+      expect(dreamResult.result.promoted).toContain("d-key")
 
       // Memory should still exist and be L1
-      const results = (await runJson(
+      const recalled = (await runJson(
         ...base,
         "memory",
         "recall",
         "important",
-      )) as Array<{ memory: { key: string; tier: string } }>
-      expect(results[0]!.memory.tier).toBe("L1")
+      )) as { results: Array<{ memory: { key: string; tier: string } }> }
+      expect(recalled.results[0]!.memory.tier).toBe("L1")
     })
 
     it("remember errors without content", async () => {

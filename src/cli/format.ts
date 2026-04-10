@@ -11,6 +11,12 @@ import type {
   Task,
   Persona,
   PersonaActivationOutput,
+  SkillInvokedOutput,
+  MemoryRememberedOutput,
+  MemoryRecalledOutput,
+  MemoryReinforcedOutput,
+  MemoryForgottenOutput,
+  MemoryDreamedOutput,
   TaskAddedOutput,
   TaskStartedOutput,
   TaskAnnotatedOutput,
@@ -51,6 +57,61 @@ export function formatDreamResult(r: DreamResult): string {
     lines.push(`Pruned: ${r.pruned.join(", ")}`)
   if (lines.length === 0) lines.push("No changes.")
   return lines.join("\n")
+}
+
+/** Human formatter for `memory remember` + hook. */
+export function formatMemoryRemembered(result: MemoryRememberedOutput): string {
+  const parts = [formatMemory(result.memory)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `memory recall` + hook. */
+export function formatMemoryRecalled(result: MemoryRecalledOutput): string {
+  const parts = [formatRecallResults(result.results)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `memory reinforce` + hook. */
+export function formatMemoryReinforced(result: MemoryReinforcedOutput): string {
+  const parts = [formatMemory(result.memory)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `memory forget` + hook. */
+export function formatMemoryForgotten(result: MemoryForgottenOutput): string {
+  const parts = [`Forgotten: ${result.key}`]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `memory dream` + hook. */
+export function formatMemoryDreamed(result: MemoryDreamedOutput): string {
+  const parts = [formatDreamResult(result.result)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
 }
 
 // ---------------------------------------------------------------------------
@@ -139,6 +200,15 @@ export function formatSkill(skill: Skill): string {
   return [`${skill.name}`, `  ${skill.description}${tags}`, "", skill.content].join(
     "\n",
   )
+}
+
+/**
+ * Human formatter for `skill run`: the raw skill content (pipe-friendly to LLM).
+ * Hook stdout is omitted from human mode to preserve the pipe contract; it is
+ * included in the JSON wrapper. Design + catalog: tnezdev/spores#26.
+ */
+export function formatSkillInvoked(result: SkillInvokedOutput): string {
+  return result.skill.content
 }
 
 // ---------------------------------------------------------------------------

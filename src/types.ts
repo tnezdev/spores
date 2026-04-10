@@ -292,6 +292,62 @@ export type TaskAnnotatedOutput = {
 }
 
 /**
+ * Output of `skill run`: the invoked skill ref plus the result of any
+ * `skill.invoked` hook that fired. Human mode outputs the raw skill content
+ * (pipe-friendly); JSON mode serializes the wrapper.
+ * Design + catalog: tnezdev/spores#26.
+ */
+export type SkillInvokedOutput = {
+  skill: Skill
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `memory remember`: the stored memory plus the result of any
+ * `memory.remembered` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type MemoryRememberedOutput = {
+  memory: Memory
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `memory recall`: the recall results plus the result of any
+ * `memory.recalled` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type MemoryRecalledOutput = {
+  results: RecallResult[]
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `memory reinforce`: the updated memory plus the result of any
+ * `memory.reinforced` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type MemoryReinforcedOutput = {
+  memory: Memory
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `memory forget`: the forgotten key plus the result of any
+ * `memory.forgotten` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type MemoryForgottenOutput = {
+  key: string
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `memory dream`: the consolidation result plus the result of any
+ * `memory.dreamed` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type MemoryDreamedOutput = {
+  result: DreamResult
+  hook?: HookInvocation | undefined
+}
+
+/**
  * Output of `task done`: the updated task plus the result of any `task.done`
  * hook that fired. The hook's stdout is appended to the human-formatted output;
  * JSON mode serializes the whole wrapper. Design + catalog: tnezdev/spores#26.

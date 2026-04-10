@@ -1,10 +1,22 @@
-import type { Memory, MemoryTier, DreamResult } from "../../types.js"
-import type { Command } from "../main.js"
-import { output } from "../main.js"
+import type {
+  Memory,
+  MemoryTier,
+  MemoryRememberedOutput,
+  MemoryRecalledOutput,
+  MemoryReinforcedOutput,
+  MemoryForgottenOutput,
+  MemoryDreamedOutput,
+  HookInvocation,
+} from "../../types.js"
+import { fireHook } from "../../hooks/fire.js"
+import type { Command } from "../context.js"
+import { output } from "../output.js"
 import {
-  formatMemory,
-  formatRecallResults,
-  formatDreamResult,
+  formatMemoryRemembered,
+  formatMemoryRecalled,
+  formatMemoryReinforced,
+  formatMemoryForgotten,
+  formatMemoryDreamed,
 } from "../format.js"
 
 const VALID_TIERS = new Set<string>(["L1", "L2", "L3"])
@@ -28,6 +40,16 @@ function parseWeight(value: string): number {
     throw new Error(`Invalid weight "${value}". Must be a number between 0 and 1.`)
   }
   return n
+}
+
+function emitHookWarning(event: string, hook: HookInvocation): void {
+  if (!hook.ran) return
+  if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+  if (hook.error !== undefined) {
+    process.stderr.write(`[hook warning] ${event}: ${hook.error}\n`)
+  } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+    process.stderr.write(`[hook warning] ${event} exited ${hook.exit_code}\n`)
+  }
 }
 
 export const rememberCommand: Command = async (ctx, args, flags) => {
@@ -63,7 +85,22 @@ export const rememberCommand: Command = async (ctx, args, flags) => {
   }
 
   await ctx.adapter.save(memory)
-  output(ctx, memory, formatMemory)
+
+  // Fire the memory.remembered event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "memory.remembered",
+    {
+      SPORES_MEMORY_KEY: memory.key,
+      SPORES_MEMORY_TIER: memory.tier,
+      SPORES_MEMORY_TAGS: memory.tags.join(","),
+      SPORES_MEMORY_WEIGHT: String(memory.weight),
+    },
+    ctx.baseDir,
+  )
+
+  const result: MemoryRememberedOutput = { memory, hook: hook.ran ? hook : undefined }
+  output(ctx, result, formatMemoryRemembered)
+  emitHookWarning("memory.remembered", hook)
 }
 
 export const recallCommand: Command = async (ctx, args, flags) => {
@@ -80,7 +117,20 @@ export const recallCommand: Command = async (ctx, args, flags) => {
       : undefined
 
   const results = await ctx.adapter.query({ text, tags, tier, limit })
-  output(ctx, results, formatRecallResults)
+
+  // Fire the memory.recalled event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "memory.recalled",
+    {
+      SPORES_MEMORY_QUERY: text ?? "",
+      SPORES_MEMORY_RESULT_COUNT: String(results.length),
+    },
+    ctx.baseDir,
+  )
+
+  const recalled: MemoryRecalledOutput = { results, hook: hook.ran ? hook : undefined }
+  output(ctx, recalled, formatMemoryRecalled)
+  emitHookWarning("memory.recalled", hook)
 }
 
 export const reinforceCommand: Command = async (ctx, args, _flags) => {
@@ -97,7 +147,21 @@ export const reinforceCommand: Command = async (ctx, args, _flags) => {
   memory.confidence = Math.min(1, memory.confidence + 0.1)
   memory.timestamp = new Date().toISOString()
   await ctx.adapter.save(memory)
-  output(ctx, memory, formatMemory)
+
+  // Fire the memory.reinforced event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "memory.reinforced",
+    {
+      SPORES_MEMORY_KEY: memory.key,
+      SPORES_MEMORY_TIER: memory.tier,
+      SPORES_MEMORY_CONFIDENCE: String(memory.confidence),
+    },
+    ctx.baseDir,
+  )
+
+  const result: MemoryReinforcedOutput = { memory, hook: hook.ran ? hook : undefined }
+  output(ctx, result, formatMemoryReinforced)
+  emitHookWarning("memory.reinforced", hook)
 }
 
 export const dreamCommand: Command = async (ctx, _args, flags) => {
@@ -117,19 +181,19 @@ export const dreamCommand: Command = async (ctx, _args, flags) => {
     )
   }
 
-  const result: DreamResult = {
-    promoted: [],
-    pruned: [],
+  const dreamResult = {
+    promoted: [] as string[],
+    pruned: [] as string[],
   }
 
   for (let pass = 0; pass < depth; pass++) {
     for (const m of memories) {
       if (m.confidence < 0.2) {
-        result.pruned.push(m.key)
+        dreamResult.pruned.push(m.key)
       } else if (m.confidence >= 0.8) {
         const next = NEXT_TIER[m.tier]
         if (next !== undefined) {
-          result.promoted.push(m.key)
+          dreamResult.promoted.push(m.key)
           if (!dryRun) {
             m.tier = next
             await ctx.adapter.save(m)
@@ -140,19 +204,32 @@ export const dreamCommand: Command = async (ctx, _args, flags) => {
 
     // Remove pruned from working set
     if (!dryRun) {
-      for (const key of result.pruned) {
+      for (const key of dreamResult.pruned) {
         await ctx.adapter.delete(key)
       }
     }
-    memories = memories.filter((m) => !result.pruned.includes(m.key))
+    memories = memories.filter((m) => !dreamResult.pruned.includes(m.key))
   }
 
   // Deduplicate
-  result.promoted = [...new Set(result.promoted)]
-  result.pruned = [...new Set(result.pruned)]
+  dreamResult.promoted = [...new Set(dreamResult.promoted)]
+  dreamResult.pruned = [...new Set(dreamResult.pruned)]
 
+  // Fire the memory.dreamed event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "memory.dreamed",
+    {
+      SPORES_MEMORY_PROMOTED_COUNT: String(dreamResult.promoted.length),
+      SPORES_MEMORY_PRUNED_COUNT: String(dreamResult.pruned.length),
+      SPORES_DRY_RUN: dryRun ? "1" : "0",
+    },
+    ctx.baseDir,
+  )
+
+  const result: MemoryDreamedOutput = { result: dreamResult, hook: hook.ran ? hook : undefined }
   const prefix = dryRun ? "[dry-run] " : ""
-  output(ctx, result, (r) => prefix + formatDreamResult(r))
+  output(ctx, result, (r) => prefix + formatMemoryDreamed(r))
+  emitHookWarning("memory.dreamed", hook)
 }
 
 export const forgetCommand: Command = async (ctx, args, _flags) => {
@@ -166,5 +243,14 @@ export const forgetCommand: Command = async (ctx, args, _flags) => {
     throw new Error(`Unknown memory: ${key}`)
   }
 
-  output(ctx, { forgotten: key }, (d) => `Forgotten: ${d.forgotten}`)
+  // Fire the memory.forgotten event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "memory.forgotten",
+    { SPORES_MEMORY_KEY: key },
+    ctx.baseDir,
+  )
+
+  const result: MemoryForgottenOutput = { key, hook: hook.ran ? hook : undefined }
+  output(ctx, result, formatMemoryForgotten)
+  emitHookWarning("memory.forgotten", hook)
 }
