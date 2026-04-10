@@ -26,6 +26,7 @@ export type {
   PersonaFile,
   Persona,
   SituationalContext,
+  HookInvocation,
   WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
   WorkflowRunTransitionedOutput,
@@ -58,3 +59,5 @@ export {
 } from "./personas/filesystem.js"
 export { activatePersona } from "./personas/activate.js"
 export { resolveSituational } from "./personas/situational.js"
+
+export { fireHook } from "./hooks/fire.js"

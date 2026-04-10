@@ -46,6 +46,7 @@ check("listPersonas is a function", typeof mod.listPersonas === "function")
 check("loadPersona is a function", typeof mod.loadPersona === "function")
 check("activatePersona is a function", typeof mod.activatePersona === "function")
 check("resolveSituational is a function", typeof mod.resolveSituational === "function")
+check("fireHook is a function", typeof mod.fireHook === "function")
 
 if (errors.length > 0) {
   console.error("\nSmoke test failed:")
