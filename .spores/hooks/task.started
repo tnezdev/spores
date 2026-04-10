@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+#
+# .spores/hooks/task.started
+#
+# Fires after `spores task start <id>` has transitioned a task to in_progress.
+# Records the started task to memory. Design + catalog: tnezdev/spores#26.
+#
+# Contract — env vars set by spores:
+#   SPORES_EVENT            = "task.started"
+#   SPORES_BIN              = path to the spores CLI entry (for callbacks)
+#   SPORES_TASK_ID          = the task ULID
+#   SPORES_TASK_DESCRIPTION = the task description
+#   SPORES_TASK_TAGS        = comma-separated tags (may be empty)
+#   SPORES_TASK_PARENT_ID   = parent task ULID (may be empty)
+#
+# Non-zero exit is surfaced as a warning — it does not fail the status update.
+
+set -euo pipefail
+
+ID="${SPORES_TASK_ID:-}"
+DESC="${SPORES_TASK_DESCRIPTION:-}"
+TAGS="${SPORES_TASK_TAGS:-}"
+
+[[ -z "$ID" ]] && exit 0
+[[ -z "$DESC" ]] && exit 0
+
+CONTENT="Task started: ${DESC}"
+[[ -n "$TAGS" ]] && CONTENT="${CONTENT} (tags: ${TAGS})"
+
+if [[ "$SPORES_BIN" == *.ts ]]; then
+  invoke() { bun "$SPORES_BIN" "$@"; }
+else
+  invoke() { "$SPORES_BIN" "$@"; }
+fi
+
+invoke memory remember "$CONTENT" \
+  --key "task-started:${ID}" \
+  --tags "task-started" \
+  --tier L1 || true

@@ -34,6 +34,7 @@ import {
   taskAddCommand,
   taskListCommand,
   taskNextCommand,
+  taskStartCommand,
   taskShowCommand,
   taskDoneCommand,
   taskAnnotateCommand,
@@ -103,6 +104,7 @@ const commands: Record<string, Command> = {
   "task add": taskAddCommand,
   "task list": taskListCommand,
   "task next": taskNextCommand,
+  "task start": taskStartCommand,
   "task show": taskShowCommand,
   "task done": taskDoneCommand,
   "task annotate": taskAnnotateCommand,
@@ -140,6 +142,7 @@ Commands:
   task add <description>              Create a new ready task
   task list                           List tasks (filter with flags)
   task next                           Show the next ready task
+  task start <id>                     Start a task (-> in_progress)
   task show <id>                      Show task details + annotations
   task done <id>                      Mark a task done
   task annotate <id> <text>           Append an annotation to a task

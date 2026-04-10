@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+#
+# .spores/hooks/task.annotated
+#
+# Fires after `spores task annotate <id> <text>` has appended an annotation.
+# Records the annotation to memory so key observations are searchable.
+# Design + catalog: tnezdev/spores#26.
+#
+# Contract — env vars set by spores:
+#   SPORES_EVENT            = "task.annotated"
+#   SPORES_BIN              = path to the spores CLI entry (for callbacks)
+#   SPORES_TASK_ID          = the task ULID
+#   SPORES_TASK_DESCRIPTION = the task description
+#   SPORES_TASK_TAGS        = comma-separated tags (may be empty)
+#   SPORES_TASK_PARENT_ID   = parent task ULID (may be empty)
+#   SPORES_TASK_ANNOTATION  = the annotation text just appended
+#
+# Non-zero exit is surfaced as a warning — it does not fail the annotation.
+
+set -euo pipefail
+
+ID="${SPORES_TASK_ID:-}"
+DESC="${SPORES_TASK_DESCRIPTION:-}"
+NOTE="${SPORES_TASK_ANNOTATION:-}"
+
+[[ -z "$ID" ]] && exit 0
+[[ -z "$NOTE" ]] && exit 0
+
+CONTENT="Annotation on '${DESC}': ${NOTE}"
+
+if [[ "$SPORES_BIN" == *.ts ]]; then
+  invoke() { bun "$SPORES_BIN" "$@"; }
+else
+  invoke() { "$SPORES_BIN" "$@"; }
+fi
+
+# Use timestamp-based key since annotations accumulate (not idempotent by design)
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+invoke memory remember "$CONTENT" \
+  --key "task-annotated:${ID}:${TS}" \
+  --tags "task-annotated" \
+  --tier L1 || true

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#
+# .spores/hooks/task.added
+#
+# Fires after `spores task add <description>` has created a new task.
+# Records the new task to memory so it's searchable via recall.
+# Design + catalog: tnezdev/spores#26.
+#
+# Contract — env vars set by spores:
+#   SPORES_EVENT            = "task.added"
+#   SPORES_BIN              = path to the spores CLI entry (for callbacks)
+#   SPORES_TASK_ID          = the task ULID
+#   SPORES_TASK_DESCRIPTION = the task description
+#   SPORES_TASK_TAGS        = comma-separated tags (may be empty)
+#   SPORES_TASK_PARENT_ID   = parent task ULID (may be empty)
+#
+# Non-zero exit is surfaced as a warning — it does not fail the task creation.
+
+set -euo pipefail
+
+ID="${SPORES_TASK_ID:-}"
+DESC="${SPORES_TASK_DESCRIPTION:-}"
+TAGS="${SPORES_TASK_TAGS:-}"
+
+[[ -z "$ID" ]] && exit 0
+[[ -z "$DESC" ]] && exit 0
+
+CONTENT="Task added: ${DESC}"
+[[ -n "$TAGS" ]] && CONTENT="${CONTENT} (tags: ${TAGS})"
+
+if [[ "$SPORES_BIN" == *.ts ]]; then
+  invoke() { bun "$SPORES_BIN" "$@"; }
+else
+  invoke() { "$SPORES_BIN" "$@"; }
+fi
+
+# Stable key so re-adding identical descriptions doesn't create dupes
+invoke memory remember "$CONTENT" \
+  --key "task-added:${ID}" \
+  --tags "task-added" \
+  --tier L1 || true

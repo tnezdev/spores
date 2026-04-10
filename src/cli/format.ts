@@ -11,6 +11,9 @@ import type {
   Task,
   Persona,
   PersonaActivationOutput,
+  TaskAddedOutput,
+  TaskStartedOutput,
+  TaskAnnotatedOutput,
   TaskDoneOutput,
   WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
@@ -180,6 +183,39 @@ export function formatNextTask(task: Task | null): string {
   if (task === null) return "No ready tasks."
   const tags = task.tags.length > 0 ? ` [${task.tags.join(", ")}]` : ""
   return `${task.id}  ${task.description}${tags}`
+}
+
+/** Human formatter for `task add` — task details + hook stdout if any ran. */
+export function formatTaskAdded(result: TaskAddedOutput): string {
+  const parts = [formatTask(result.task)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `task start` — task details + hook stdout if any ran. */
+export function formatTaskStarted(result: TaskStartedOutput): string {
+  const parts = [formatTask(result.task)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `task annotate` — task details + hook stdout if any ran. */
+export function formatTaskAnnotated(result: TaskAnnotatedOutput): string {
+  const parts = [formatTask(result.task)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
 }
 
 /**

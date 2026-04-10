@@ -6,6 +6,7 @@ import {
   taskAddCommand,
   taskListCommand,
   taskNextCommand,
+  taskStartCommand,
   taskShowCommand,
   taskDoneCommand,
   taskAnnotateCommand,
@@ -64,11 +65,13 @@ describe("task CLI commands", () => {
     const out = await captureStdout(() =>
       taskAddCommand(ctx, ["write docs"], { tags: "docs,writing" }),
     )
-    const task = JSON.parse(out)
+    const result = JSON.parse(out)
+    const task = result.task
     expect(task.description).toBe("write docs")
     expect(task.status).toBe("ready")
     expect(task.tags).toEqual(["docs", "writing"])
     expect(task.id).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/)
+    expect(result.hook).toBeUndefined()
 
     // Persisted to disk
     const adapter = new FilesystemTaskAdapter(tmpDir)
@@ -83,9 +86,9 @@ describe("task CLI commands", () => {
         wait: "2099-01-01T00:00:00.000Z",
       }),
     )
-    const task = JSON.parse(out)
-    expect(task.parent_id).toBe("ABC")
-    expect(task.wait_until).toBe("2099-01-01T00:00:00.000Z")
+    const result = JSON.parse(out)
+    expect(result.task.parent_id).toBe("ABC")
+    expect(result.task.wait_until).toBe("2099-01-01T00:00:00.000Z")
   })
 
   it("task add requires description", async () => {
@@ -274,14 +277,193 @@ describe("task CLI commands", () => {
     const out = await captureStdout(() =>
       taskAnnotateCommand(ctx, [t.id, "note me"], {}),
     )
-    const updated = JSON.parse(out)
-    expect(updated.annotations.length).toBe(1)
-    expect(updated.annotations[0].text).toBe("note me")
+    const result = JSON.parse(out)
+    expect(result.task.annotations.length).toBe(1)
+    expect(result.task.annotations[0].text).toBe("note me")
+    expect(result.hook).toBeUndefined()
   })
 
   it("task annotate requires id and text", async () => {
     await expect(taskAnnotateCommand(ctx, ["id-only"], {})).rejects.toThrow(
       /Usage/,
     )
+  })
+
+  // ---------------------------------------------------------------------------
+  // task.added hook
+  // ---------------------------------------------------------------------------
+
+  it("task add fires task.added hook when present", async () => {
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-"))
+    const hookPath = join(hooksDir, "task.added")
+    await writeFile(
+      hookPath,
+      "#!/usr/bin/env bash\necho \"added: $SPORES_TASK_DESCRIPTION\"\n",
+    )
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const out = await captureStdout(() =>
+        taskAddCommand(ctx, ["hook test task"], {}),
+      )
+      const result = JSON.parse(out)
+      expect(result.task.description).toBe("hook test task")
+      expect(result.hook).toBeDefined()
+      expect(result.hook.ran).toBe(true)
+      expect(result.hook.stdout).toContain("hook test task")
+    } finally {
+      if (origEnv === undefined) delete process.env["SPORES_HOOKS_DIR"]
+      else process.env["SPORES_HOOKS_DIR"] = origEnv
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  it("task add hook failure is non-fatal", async () => {
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-"))
+    const hookPath = join(hooksDir, "task.added")
+    await writeFile(hookPath, "#!/usr/bin/env bash\nexit 1\n")
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const out = await captureStdout(() =>
+        taskAddCommand(ctx, ["will fail"], {}),
+      )
+      const result = JSON.parse(out)
+      expect(result.task.status).toBe("ready")
+      expect(result.hook.ran).toBe(true)
+      expect(result.hook.exit_code).toBe(1)
+    } finally {
+      if (origEnv === undefined) delete process.env["SPORES_HOOKS_DIR"]
+      else process.env["SPORES_HOOKS_DIR"] = origEnv
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  // ---------------------------------------------------------------------------
+  // task.started hook
+  // ---------------------------------------------------------------------------
+
+  it("task start transitions to in_progress and fires task.started hook", async () => {
+    const adapter = new FilesystemTaskAdapter(tmpDir)
+    const t = await adapter.createTask({
+      description: "start me",
+      status: "ready",
+      tags: ["work"],
+    })
+
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-"))
+    const hookPath = join(hooksDir, "task.started")
+    await writeFile(
+      hookPath,
+      "#!/usr/bin/env bash\necho \"started: $SPORES_TASK_DESCRIPTION\"\n",
+    )
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const out = await captureStdout(() =>
+        taskStartCommand(ctx, [t.id], {}),
+      )
+      const result = JSON.parse(out)
+      expect(result.task.status).toBe("in_progress")
+      expect(result.hook).toBeDefined()
+      expect(result.hook.ran).toBe(true)
+      expect(result.hook.stdout).toContain("start me")
+    } finally {
+      if (origEnv === undefined) delete process.env["SPORES_HOOKS_DIR"]
+      else process.env["SPORES_HOOKS_DIR"] = origEnv
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  it("task start without hook sets in_progress cleanly", async () => {
+    const adapter = new FilesystemTaskAdapter(tmpDir)
+    const t = await adapter.createTask({
+      description: "no hook",
+      status: "ready",
+      tags: [],
+    })
+    const out = await captureStdout(() => taskStartCommand(ctx, [t.id], {}))
+    const result = JSON.parse(out)
+    expect(result.task.status).toBe("in_progress")
+    expect(result.hook).toBeUndefined()
+  })
+
+  it("task start requires id", async () => {
+    await expect(taskStartCommand(ctx, [], {})).rejects.toThrow(/Usage/)
+  })
+
+  // ---------------------------------------------------------------------------
+  // task.annotated hook
+  // ---------------------------------------------------------------------------
+
+  it("task annotate fires task.annotated hook when present", async () => {
+    const adapter = new FilesystemTaskAdapter(tmpDir)
+    const t = await adapter.createTask({
+      description: "annotate me",
+      status: "ready",
+      tags: [],
+    })
+
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-"))
+    const hookPath = join(hooksDir, "task.annotated")
+    await writeFile(
+      hookPath,
+      "#!/usr/bin/env bash\necho \"annotated: $SPORES_TASK_ANNOTATION\"\n",
+    )
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const out = await captureStdout(() =>
+        taskAnnotateCommand(ctx, [t.id, "my note"], {}),
+      )
+      const result = JSON.parse(out)
+      expect(result.task.annotations.length).toBe(1)
+      expect(result.task.annotations[0].text).toBe("my note")
+      expect(result.hook).toBeDefined()
+      expect(result.hook.ran).toBe(true)
+      expect(result.hook.stdout).toContain("my note")
+    } finally {
+      if (origEnv === undefined) delete process.env["SPORES_HOOKS_DIR"]
+      else process.env["SPORES_HOOKS_DIR"] = origEnv
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  it("task annotate hook failure is non-fatal", async () => {
+    const adapter = new FilesystemTaskAdapter(tmpDir)
+    const t = await adapter.createTask({
+      description: "z",
+      status: "ready",
+      tags: [],
+    })
+
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-"))
+    const hookPath = join(hooksDir, "task.annotated")
+    await writeFile(hookPath, "#!/usr/bin/env bash\nexit 1\n")
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const out = await captureStdout(() =>
+        taskAnnotateCommand(ctx, [t.id, "fail note"], {}),
+      )
+      const result = JSON.parse(out)
+      expect(result.task.annotations.length).toBe(1)
+      expect(result.hook.ran).toBe(true)
+      expect(result.hook.exit_code).toBe(1)
+    } finally {
+      if (origEnv === undefined) delete process.env["SPORES_HOOKS_DIR"]
+      else process.env["SPORES_HOOKS_DIR"] = origEnv
+      await rm(hooksDir, { recursive: true, force: true })
+    }
   })
 })

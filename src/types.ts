@@ -265,6 +265,33 @@ export type PersonaActivationOutput = {
 }
 
 /**
+ * Output of `task add`: the created task plus the result of any `task.added`
+ * hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type TaskAddedOutput = {
+  task: Task
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `task start`: the updated task (now in_progress) plus the result
+ * of any `task.started` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type TaskStartedOutput = {
+  task: Task
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `task annotate`: the updated task plus the result of any
+ * `task.annotated` hook that fired. Design + catalog: tnezdev/spores#26.
+ */
+export type TaskAnnotatedOutput = {
+  task: Task
+  hook?: HookInvocation | undefined
+}
+
+/**
  * Output of `task done`: the updated task plus the result of any `task.done`
  * hook that fired. The hook's stdout is appended to the human-formatted output;
  * JSON mode serializes the whole wrapper. Design + catalog: tnezdev/spores#26.

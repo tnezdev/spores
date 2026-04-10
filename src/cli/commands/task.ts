@@ -1,9 +1,25 @@
-import type { Task, TaskQuery, TaskStatus, TaskDoneOutput } from "../../types.js"
+import type {
+  Task,
+  TaskQuery,
+  TaskStatus,
+  TaskAddedOutput,
+  TaskStartedOutput,
+  TaskAnnotatedOutput,
+  TaskDoneOutput,
+} from "../../types.js"
 import { FilesystemTaskAdapter } from "../../tasks/filesystem.js"
 import { fireHook } from "../../hooks/fire.js"
 import type { Command } from "../context.js"
 import { output } from "../output.js"
-import { formatTask, formatTasks, formatNextTask, formatTaskDone } from "../format.js"
+import {
+  formatTask,
+  formatTasks,
+  formatNextTask,
+  formatTaskAdded,
+  formatTaskStarted,
+  formatTaskAnnotated,
+  formatTaskDone,
+} from "../format.js"
 
 const VALID_STATUSES = new Set<TaskStatus>([
   "ready",
@@ -65,7 +81,32 @@ export const taskAddCommand: Command = async (ctx, args, flags) => {
     ...(wait_until !== undefined ? { wait_until } : {}),
   })
 
-  output(ctx, task, formatTask)
+  // Fire the task.added event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "task.added",
+    {
+      SPORES_TASK_ID: task.id,
+      SPORES_TASK_DESCRIPTION: task.description,
+      SPORES_TASK_TAGS: task.tags.join(","),
+      SPORES_TASK_PARENT_ID: task.parent_id ?? "",
+    },
+    ctx.baseDir,
+  )
+
+  const result: TaskAddedOutput = {
+    task,
+    hook: hook.ran ? hook : undefined,
+  }
+  output(ctx, result, formatTaskAdded)
+
+  if (hook.ran) {
+    if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+    if (hook.error !== undefined) {
+      process.stderr.write(`[hook warning] task.added: ${hook.error}\n`)
+    } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] task.added exited ${hook.exit_code}\n`)
+    }
+  }
 }
 
 export const taskListCommand: Command = async (ctx, _args, flags) => {
@@ -93,6 +134,41 @@ export const taskNextCommand: Command = async (ctx, _args, flags) => {
 
   const task = await adapter.nextReadyTask(query)
   output(ctx, task, formatNextTask)
+}
+
+export const taskStartCommand: Command = async (ctx, args, _flags) => {
+  const id = args[0]
+  if (id === undefined) throw new Error("Usage: spores task start <id>")
+
+  const adapter = new FilesystemTaskAdapter(ctx.baseDir)
+  const task: Task = await adapter.updateTaskStatus(id, "in_progress")
+
+  // Fire the task.started event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "task.started",
+    {
+      SPORES_TASK_ID: task.id,
+      SPORES_TASK_DESCRIPTION: task.description,
+      SPORES_TASK_TAGS: task.tags.join(","),
+      SPORES_TASK_PARENT_ID: task.parent_id ?? "",
+    },
+    ctx.baseDir,
+  )
+
+  const result: TaskStartedOutput = {
+    task,
+    hook: hook.ran ? hook : undefined,
+  }
+  output(ctx, result, formatTaskStarted)
+
+  if (hook.ran) {
+    if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+    if (hook.error !== undefined) {
+      process.stderr.write(`[hook warning] task.started: ${hook.error}\n`)
+    } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] task.started exited ${hook.exit_code}\n`)
+    }
+  }
 }
 
 export const taskShowCommand: Command = async (ctx, args, _flags) => {
@@ -154,5 +230,32 @@ export const taskAnnotateCommand: Command = async (ctx, args, _flags) => {
 
   const adapter = new FilesystemTaskAdapter(ctx.baseDir)
   const task = await adapter.annotateTask(id, text)
-  output(ctx, task, formatTask)
+
+  // Fire the task.annotated event. Design + catalog: tnezdev/spores#26.
+  const hook = await fireHook(
+    "task.annotated",
+    {
+      SPORES_TASK_ID: task.id,
+      SPORES_TASK_DESCRIPTION: task.description,
+      SPORES_TASK_TAGS: task.tags.join(","),
+      SPORES_TASK_PARENT_ID: task.parent_id ?? "",
+      SPORES_TASK_ANNOTATION: text,
+    },
+    ctx.baseDir,
+  )
+
+  const result: TaskAnnotatedOutput = {
+    task,
+    hook: hook.ran ? hook : undefined,
+  }
+  output(ctx, result, formatTaskAnnotated)
+
+  if (hook.ran) {
+    if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+    if (hook.error !== undefined) {
+      process.stderr.write(`[hook warning] task.annotated: ${hook.error}\n`)
+    } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] task.annotated exited ${hook.exit_code}\n`)
+    }
+  }
 }
