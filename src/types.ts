@@ -298,3 +298,21 @@ export type WorkflowRunTerminatedOutput = {
   outcome: "completed" | "failed"
   hook?: HookInvocation | undefined
 }
+
+/**
+ * Output emitted on every node status change — `workflow start`, `workflow done`,
+ * `workflow fail`. Fires *after* the transition is persisted, before any
+ * `workflow.run.terminated` check. Env vars passed to the hook:
+ *   SPORES_RUN_ID, SPORES_GRAPH_ID, SPORES_NODE_ID,
+ *   SPORES_FROM_STATUS, SPORES_TO_STATUS, SPORES_PASS
+ * Design + catalog: tnezdev/spores#26.
+ */
+export type WorkflowRunTransitionedOutput = {
+  run_id: string
+  graph_id: string
+  node_id: string
+  from_status: NodeStatus
+  to_status: NodeStatus
+  pass: number
+  hook?: HookInvocation | undefined
+}

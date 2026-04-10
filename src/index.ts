@@ -26,6 +26,9 @@ export type {
   PersonaFile,
   Persona,
   SituationalContext,
+  WorkflowRunStartedOutput,
+  WorkflowRunTerminatedOutput,
+  WorkflowRunTransitionedOutput,
 } from "./types.js"
 
 export type { MemoryAdapter, AdapterCapabilities } from "./memory/adapter.js"

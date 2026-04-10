@@ -14,6 +14,7 @@ import type {
   TaskDoneOutput,
   WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
+  WorkflowRunTransitionedOutput,
   PersonaFile,
   PersonaRef,
 } from "../types.js"
@@ -213,6 +214,20 @@ export function formatWorkflowRunTerminated(
 ): string {
   const parts = [
     `Run ${result.run_id} terminated (graph: ${result.graph_id}, outcome: ${result.outcome})`,
+  ]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+export function formatWorkflowRunTransitioned(
+  result: WorkflowRunTransitionedOutput,
+): string {
+  const parts = [
+    `Transition: ${result.node_id} ${result.from_status} → ${result.to_status} (pass ${result.pass})`,
   ]
   const hook = result.hook
   if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {

@@ -312,3 +312,161 @@ describe("workflow CLI commands — workflow.run.terminated hook", () => {
     }
   })
 })
+
+describe("workflow CLI commands — workflow.run.transitioned hook", () => {
+  let tmpDir: string
+  let graphFile: string
+  let ctx: Ctx
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "spores-wf-tr-"))
+    await mkdir(join(tmpDir, ".spores", "workflow", "graphs"), { recursive: true })
+    await mkdir(join(tmpDir, ".spores", "workflow", "runs"), { recursive: true })
+    await mkdir(join(tmpDir, ".spores", "memory"), { recursive: true })
+
+    graphFile = join(tmpDir, "linear.json")
+    await writeFile(graphFile, JSON.stringify(LINEAR_GRAPH))
+
+    ctx = makeCtx(tmpDir)
+    await workflowCreateCommand(ctx, [graphFile], {})
+  })
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  it("fires workflow.run.transitioned on workflow start (no hook installed)", async () => {
+    const [runBlob] = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+    const runId = JSON.parse(runBlob!).run_id
+
+    const calls = await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "A"], {}))
+
+    expect(calls.length).toBe(1)
+    const tr = JSON.parse(calls[0]!)
+    expect(tr.run_id).toBe(runId)
+    expect(tr.graph_id).toBe("linear")
+    expect(tr.node_id).toBe("A")
+    expect(tr.from_status).toBe("pending")
+    expect(tr.to_status).toBe("in_progress")
+    expect(tr.pass).toBe(1)
+    expect(tr.hook).toBeUndefined()
+  })
+
+  it("fires workflow.run.transitioned on workflow done (no hook installed)", async () => {
+    const [runBlob] = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+    const runId = JSON.parse(runBlob!).run_id
+
+    await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "A"], {}))
+
+    // Completing A — B still pending, NOT terminal (transitioned only, no terminated)
+    const calls = await captureOutputCalls(() => workflowDoneCommand(ctx, [runId, "A"], {}))
+
+    expect(calls.length).toBe(1)
+    const tr = JSON.parse(calls[0]!)
+    expect(tr.node_id).toBe("A")
+    expect(tr.from_status).toBe("in_progress")
+    expect(tr.to_status).toBe("completed")
+    expect(tr.hook).toBeUndefined()
+  })
+
+  it("fires workflow.run.transitioned on workflow fail (no hook installed)", async () => {
+    const [runBlob] = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+    const runId = JSON.parse(runBlob!).run_id
+
+    await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "A"], {}))
+
+    // Failing A — B still pending, NOT terminal (transitioned only, no terminated)
+    const calls = await captureOutputCalls(() => workflowFailCommand(ctx, [runId, "A"], {}))
+
+    expect(calls.length).toBe(1)
+    const tr = JSON.parse(calls[0]!)
+    expect(tr.node_id).toBe("A")
+    expect(tr.from_status).toBe("in_progress")
+    expect(tr.to_status).toBe("failed")
+    expect(tr.hook).toBeUndefined()
+  })
+
+  it("fires workflow.run.transitioned hook and captures output", async () => {
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-tr-"))
+    const hookPath = join(hooksDir, "workflow.run.transitioned")
+    await writeFile(
+      hookPath,
+      '#!/usr/bin/env bash\necho "node $SPORES_NODE_ID: $SPORES_FROM_STATUS -> $SPORES_TO_STATUS (pass $SPORES_PASS)"\n',
+    )
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const [runBlob] = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+      const runId = JSON.parse(runBlob!).run_id
+
+      const calls = await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "A"], {}))
+      expect(calls.length).toBe(1)
+
+      const tr = JSON.parse(calls[0]!)
+      expect(tr.hook).toBeDefined()
+      expect(tr.hook.ran).toBe(true)
+      expect(tr.hook.stdout).toContain("A")
+      expect(tr.hook.stdout).toContain("pending")
+      expect(tr.hook.stdout).toContain("in_progress")
+    } finally {
+      if (origEnv === undefined) {
+        delete process.env["SPORES_HOOKS_DIR"]
+      } else {
+        process.env["SPORES_HOOKS_DIR"] = origEnv
+      }
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  it("workflow.run.transitioned hook failure is non-fatal", async () => {
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-tr-"))
+    const hookPath = join(hooksDir, "workflow.run.transitioned")
+    await writeFile(hookPath, "#!/usr/bin/env bash\nexit 5\n")
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const [runBlob] = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+      const runId = JSON.parse(runBlob!).run_id
+
+      const calls = await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "A"], {}))
+      expect(calls.length).toBe(1)
+
+      const tr = JSON.parse(calls[0]!)
+      expect(tr.node_id).toBe("A")
+      expect(tr.hook.ran).toBe(true)
+      expect(tr.hook.exit_code).toBe(5)
+    } finally {
+      if (origEnv === undefined) {
+        delete process.env["SPORES_HOOKS_DIR"]
+      } else {
+        process.env["SPORES_HOOKS_DIR"] = origEnv
+      }
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  it("transitioned fires before terminated on final node completion", async () => {
+    const [runBlob] = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+    const runId = JSON.parse(runBlob!).run_id
+
+    await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "A"], {}))
+    await captureOutputCalls(() => workflowDoneCommand(ctx, [runId, "A"], {}))
+    await captureOutputCalls(() => workflowStartCommand(ctx, [runId, "B"], {}))
+
+    // Completing B → transitioned then terminated
+    const calls = await captureOutputCalls(() => workflowDoneCommand(ctx, [runId, "B"], {}))
+    expect(calls.length).toBe(2)
+
+    const tr = JSON.parse(calls[0]!)
+    expect(tr.node_id).toBe("B")
+    expect(tr.to_status).toBe("completed")
+
+    const terminated = JSON.parse(calls[1]!)
+    expect(terminated.run_id).toBe(runId)
+    expect(terminated.outcome).toBe("completed")
+  })
+})

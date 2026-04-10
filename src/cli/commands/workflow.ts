@@ -6,8 +6,10 @@ import { Runtime } from "../../workflow/runtime.js"
 import { fireHook } from "../../hooks/fire.js"
 import type {
   GraphDef,
+  Transition,
   WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
+  WorkflowRunTransitionedOutput,
 } from "../../types.js"
 import {
   formatGraphs,
@@ -17,6 +19,7 @@ import {
   formatHistory,
   formatWorkflowRunStarted,
   formatWorkflowRunTerminated,
+  formatWorkflowRunTransitioned,
 } from "../format.js"
 
 function makeRuntime(ctx: Ctx): Runtime {
@@ -27,6 +30,43 @@ function makeRuntime(ctx: Ctx): Runtime {
 function identity(flags: Record<string, string | true>): string {
   if (typeof flags["identity"] === "string") return flags["identity"]
   return process.env["USER"] ?? "anonymous"
+}
+
+/**
+ * Fire `workflow.run.transitioned` after every node status change. This event
+ * fires on every `workflow start`, `workflow done`, and `workflow fail` — before
+ * the terminal check. Env vars: SPORES_RUN_ID, SPORES_GRAPH_ID, SPORES_NODE_ID,
+ * SPORES_FROM_STATUS, SPORES_TO_STATUS, SPORES_PASS.
+ * Design + catalog: tnezdev/spores#26.
+ */
+async function fireTransitioned(
+  t: Transition,
+  runId: string,
+  graphId: string,
+  ctx: Ctx,
+): Promise<WorkflowRunTransitionedOutput> {
+  const hook = await fireHook(
+    "workflow.run.transitioned",
+    {
+      SPORES_RUN_ID: runId,
+      SPORES_GRAPH_ID: graphId,
+      SPORES_NODE_ID: t.node_id,
+      SPORES_FROM_STATUS: t.from_status,
+      SPORES_TO_STATUS: t.to_status,
+      SPORES_PASS: String(t.pass),
+    },
+    ctx.baseDir,
+  )
+
+  return {
+    run_id: runId,
+    graph_id: graphId,
+    node_id: t.node_id,
+    from_status: t.from_status,
+    to_status: t.to_status,
+    pass: t.pass,
+    hook: hook.ran ? hook : undefined,
+  }
 }
 
 /**
@@ -220,7 +260,17 @@ export const workflowStartCommand: Command = async (ctx, args, flags) => {
     "in_progress",
     identity(flags),
   )
-  output(ctx, t, (t) => `Started: ${t.node_id} (pass ${t.pass})`)
+
+  const transitioned = await fireTransitioned(t, runId, run.graph_id, ctx)
+  output(ctx, transitioned, formatWorkflowRunTransitioned)
+  if (transitioned.hook?.ran) {
+    if (transitioned.hook.stderr.length > 0) process.stderr.write(transitioned.hook.stderr)
+    if (transitioned.hook.error !== undefined) {
+      process.stderr.write(`[hook warning] workflow.run.transitioned: ${transitioned.hook.error}\n`)
+    } else if (transitioned.hook.exit_code !== null && transitioned.hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] workflow.run.transitioned exited ${transitioned.hook.exit_code}\n`)
+    }
+  }
 }
 
 export const workflowDoneCommand: Command = async (ctx, args, flags) => {
@@ -244,7 +294,16 @@ export const workflowDoneCommand: Command = async (ctx, args, flags) => {
     identity(flags),
     reason ? { reason } : undefined,
   )
-  output(ctx, t, (t) => `Completed: ${t.node_id} (pass ${t.pass})`)
+  const transitioned = await fireTransitioned(t, runId, run.graph_id, ctx)
+  output(ctx, transitioned, formatWorkflowRunTransitioned)
+  if (transitioned.hook?.ran) {
+    if (transitioned.hook.stderr.length > 0) process.stderr.write(transitioned.hook.stderr)
+    if (transitioned.hook.error !== undefined) {
+      process.stderr.write(`[hook warning] workflow.run.transitioned: ${transitioned.hook.error}\n`)
+    } else if (transitioned.hook.exit_code !== null && transitioned.hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] workflow.run.transitioned exited ${transitioned.hook.exit_code}\n`)
+    }
+  }
 
   const terminated = await maybeFireTerminated(rt, runId, ctx)
   if (terminated !== null) {
@@ -282,7 +341,16 @@ export const workflowFailCommand: Command = async (ctx, args, flags) => {
     identity(flags),
     reason ? { reason } : undefined,
   )
-  output(ctx, t, (t) => `Failed: ${t.node_id} (pass ${t.pass})`)
+  const transitioned = await fireTransitioned(t, runId, run.graph_id, ctx)
+  output(ctx, transitioned, formatWorkflowRunTransitioned)
+  if (transitioned.hook?.ran) {
+    if (transitioned.hook.stderr.length > 0) process.stderr.write(transitioned.hook.stderr)
+    if (transitioned.hook.error !== undefined) {
+      process.stderr.write(`[hook warning] workflow.run.transitioned: ${transitioned.hook.error}\n`)
+    } else if (transitioned.hook.exit_code !== null && transitioned.hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] workflow.run.transitioned exited ${transitioned.hook.exit_code}\n`)
+    }
+  }
 
   const terminated = await maybeFireTerminated(rt, runId, ctx)
   if (terminated !== null) {
