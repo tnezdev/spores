@@ -275,6 +275,17 @@ export type TaskDoneOutput = {
 }
 
 /**
+ * Output of `workflow run <graph-id>` — the newly created run, plus the result
+ * of any `workflow.run.started` hook that fired.
+ * Design + catalog: tnezdev/spores#26.
+ */
+export type WorkflowRunStartedOutput = {
+  run_id: string
+  graph_id: string
+  hook?: HookInvocation | undefined
+}
+
+/**
  * Output of `workflow done` / `workflow fail` when the transition causes a run
  * to reach a terminal state. Contains the final transition, the run outcome
  * ("completed" if all terminal nodes completed, "failed" if any failed), and

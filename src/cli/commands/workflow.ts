@@ -4,13 +4,18 @@ import { output } from "../output.js"
 import { FilesystemWorkflowAdapter } from "../../workflow/filesystem.js"
 import { Runtime } from "../../workflow/runtime.js"
 import { fireHook } from "../../hooks/fire.js"
-import type { GraphDef, WorkflowRunTerminatedOutput } from "../../types.js"
+import type {
+  GraphDef,
+  WorkflowRunStartedOutput,
+  WorkflowRunTerminatedOutput,
+} from "../../types.js"
 import {
   formatGraphs,
   formatRuns,
   formatStatus,
   formatNext,
   formatHistory,
+  formatWorkflowRunStarted,
   formatWorkflowRunTerminated,
 } from "../format.js"
 
@@ -143,7 +148,31 @@ export const workflowRunCommand: Command = async (ctx, args, flags) => {
   const rt = makeRuntime(ctx)
   const run = await rt.createRun(graphId, name)
 
-  output(ctx, run, (r) => `Created run: ${r.run_id} (graph: ${r.graph_id})`)
+  const hook = await fireHook(
+    "workflow.run.started",
+    {
+      SPORES_RUN_ID: run.run_id,
+      SPORES_GRAPH_ID: run.graph_id,
+    },
+    ctx.baseDir,
+  )
+
+  const started: WorkflowRunStartedOutput = {
+    run_id: run.run_id,
+    graph_id: run.graph_id,
+    hook: hook.ran ? hook : undefined,
+  }
+
+  output(ctx, started, formatWorkflowRunStarted)
+
+  if (hook.ran) {
+    if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+    if (hook.error !== undefined) {
+      process.stderr.write(`[hook warning] workflow.run.started: ${hook.error}\n`)
+    } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+      process.stderr.write(`[hook warning] workflow.run.started exited ${hook.exit_code}\n`)
+    }
+  }
 }
 
 // ---- Workflow execution ---------------------------------------------------

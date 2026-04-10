@@ -12,6 +12,7 @@ import type {
   Persona,
   PersonaActivationOutput,
   TaskDoneOutput,
+  WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
   PersonaFile,
   PersonaRef,
@@ -187,6 +188,18 @@ export function formatNextTask(task: Task | null): string {
  */
 export function formatTaskDone(result: TaskDoneOutput): string {
   const parts = [formatTask(result.task)]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+export function formatWorkflowRunStarted(
+  result: WorkflowRunStartedOutput,
+): string {
+  const parts = [`Run ${result.run_id} started (graph: ${result.graph_id})`]
   const hook = result.hook
   if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
     parts.push("\n---\n")

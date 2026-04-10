@@ -71,6 +71,98 @@ const LINEAR_GRAPH = {
   edges: [{ from: "A", to: "B" }],
 }
 
+describe("workflow CLI commands — workflow.run.started hook", () => {
+  let tmpDir: string
+  let graphFile: string
+  let ctx: Ctx
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "spores-wf-started-"))
+    await mkdir(join(tmpDir, ".spores", "workflow", "graphs"), { recursive: true })
+    await mkdir(join(tmpDir, ".spores", "workflow", "runs"), { recursive: true })
+    await mkdir(join(tmpDir, ".spores", "memory"), { recursive: true })
+
+    graphFile = join(tmpDir, "linear.json")
+    await writeFile(graphFile, JSON.stringify(LINEAR_GRAPH))
+
+    ctx = makeCtx(tmpDir)
+    await workflowCreateCommand(ctx, [graphFile], {})
+  })
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  it("fires workflow.run.started when a run is created (no hook installed)", async () => {
+    const calls = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+
+    // One output call — the WorkflowRunStartedOutput
+    expect(calls.length).toBe(1)
+    const started = JSON.parse(calls[0]!)
+    expect(started.run_id).toBeDefined()
+    expect(started.graph_id).toBe("linear")
+    expect(started.hook).toBeUndefined() // no hook installed
+  })
+
+  it("fires workflow.run.started hook and captures output", async () => {
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-started-"))
+    const hookPath = join(hooksDir, "workflow.run.started")
+    await writeFile(
+      hookPath,
+      '#!/usr/bin/env bash\necho "run $SPORES_RUN_ID started for graph $SPORES_GRAPH_ID"\n',
+    )
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const calls = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+      expect(calls.length).toBe(1)
+
+      const started = JSON.parse(calls[0]!)
+      expect(started.run_id).toBeDefined()
+      expect(started.graph_id).toBe("linear")
+      expect(started.hook).toBeDefined()
+      expect(started.hook.ran).toBe(true)
+      expect(started.hook.stdout).toContain(started.run_id)
+      expect(started.hook.stdout).toContain("linear")
+    } finally {
+      if (origEnv === undefined) {
+        delete process.env["SPORES_HOOKS_DIR"]
+      } else {
+        process.env["SPORES_HOOKS_DIR"] = origEnv
+      }
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+
+  it("workflow.run.started hook failure is non-fatal", async () => {
+    const hooksDir = await mkdtemp(join(tmpdir(), "spores-hooks-started-"))
+    const hookPath = join(hooksDir, "workflow.run.started")
+    await writeFile(hookPath, "#!/usr/bin/env bash\nexit 3\n")
+    await chmod(hookPath, 0o755)
+
+    const origEnv = process.env["SPORES_HOOKS_DIR"]
+    process.env["SPORES_HOOKS_DIR"] = hooksDir
+    try {
+      const calls = await captureOutputCalls(() => workflowRunCommand(ctx, ["linear"], {}))
+      expect(calls.length).toBe(1)
+
+      const started = JSON.parse(calls[0]!)
+      expect(started.run_id).toBeDefined()
+      expect(started.hook.ran).toBe(true)
+      expect(started.hook.exit_code).toBe(3)
+    } finally {
+      if (origEnv === undefined) {
+        delete process.env["SPORES_HOOKS_DIR"]
+      } else {
+        process.env["SPORES_HOOKS_DIR"] = origEnv
+      }
+      await rm(hooksDir, { recursive: true, force: true })
+    }
+  })
+})
+
 describe("workflow CLI commands — workflow.run.terminated hook", () => {
   let tmpDir: string
   let graphFile: string
