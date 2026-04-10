@@ -273,3 +273,17 @@ export type TaskDoneOutput = {
   task: Task
   hook?: HookInvocation | undefined
 }
+
+/**
+ * Output of `workflow done` / `workflow fail` when the transition causes a run
+ * to reach a terminal state. Contains the final transition, the run outcome
+ * ("completed" if all terminal nodes completed, "failed" if any failed), and
+ * the result of any `workflow.run.terminated` hook that fired.
+ * Design + catalog: tnezdev/spores#26.
+ */
+export type WorkflowRunTerminatedOutput = {
+  run_id: string
+  graph_id: string
+  outcome: "completed" | "failed"
+  hook?: HookInvocation | undefined
+}

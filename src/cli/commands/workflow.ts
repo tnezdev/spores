@@ -1,15 +1,17 @@
 import { readFile } from "node:fs/promises"
-import type { Command, Ctx } from "../main.js"
-import { output } from "../main.js"
+import type { Command, Ctx } from "../context.js"
+import { output } from "../output.js"
 import { FilesystemWorkflowAdapter } from "../../workflow/filesystem.js"
 import { Runtime } from "../../workflow/runtime.js"
-import type { GraphDef } from "../../types.js"
+import { fireHook } from "../../hooks/fire.js"
+import type { GraphDef, WorkflowRunTerminatedOutput } from "../../types.js"
 import {
   formatGraphs,
   formatRuns,
   formatStatus,
   formatNext,
   formatHistory,
+  formatWorkflowRunTerminated,
 } from "../format.js"
 
 function makeRuntime(ctx: Ctx): Runtime {
@@ -20,6 +22,57 @@ function makeRuntime(ctx: Ctx): Runtime {
 function identity(flags: Record<string, string | true>): string {
   if (typeof flags["identity"] === "string") return flags["identity"]
   return process.env["USER"] ?? "anonymous"
+}
+
+/**
+ * After a node transition, check whether the run has reached a terminal state.
+ * If so, fire the `workflow.run.terminated` hook and return the output;
+ * otherwise return null.
+ *
+ * A run is terminal when every node is in a "done" state: completed, failed,
+ * or invalidated. Nodes that are still pending or in_progress mean there is
+ * work left to do. Failed nodes ARE terminal — they may be retried, but the
+ * run has stopped progressing on its own.
+ * Design + catalog: tnezdev/spores#26.
+ */
+async function maybeFireTerminated(
+  rt: Runtime,
+  runId: string,
+  ctx: Ctx,
+): Promise<WorkflowRunTerminatedOutput | null> {
+  const run = await rt.getRun(runId)
+  if (!run) return null
+  const graph = await rt.getGraph(run.graph_id)
+  if (!graph) return null
+
+  const states = rt.deriveNodeStates(graph, run)
+
+  const anyActive = Object.values(states).some(
+    (s) => s.status === "pending" || s.status === "in_progress",
+  )
+  if (anyActive) return null
+
+  // Determine outcome: failed if any terminal node failed, else completed.
+  const outcome = Object.values(states).some((s) => s.status === "failed")
+    ? "failed"
+    : "completed"
+
+  const hook = await fireHook(
+    "workflow.run.terminated",
+    {
+      SPORES_RUN_ID: run.run_id,
+      SPORES_GRAPH_ID: run.graph_id,
+      SPORES_RUN_OUTCOME: outcome,
+    },
+    ctx.baseDir,
+  )
+
+  return {
+    run_id: run.run_id,
+    graph_id: run.graph_id,
+    outcome,
+    hook: hook.ran ? hook : undefined,
+  }
 }
 
 // ---- Graph management -----------------------------------------------------
@@ -163,6 +216,20 @@ export const workflowDoneCommand: Command = async (ctx, args, flags) => {
     reason ? { reason } : undefined,
   )
   output(ctx, t, (t) => `Completed: ${t.node_id} (pass ${t.pass})`)
+
+  const terminated = await maybeFireTerminated(rt, runId, ctx)
+  if (terminated !== null) {
+    output(ctx, terminated, formatWorkflowRunTerminated)
+    const hook = terminated.hook
+    if (hook !== undefined && hook.ran) {
+      if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+      if (hook.error !== undefined) {
+        process.stderr.write(`[hook warning] workflow.run.terminated: ${hook.error}\n`)
+      } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+        process.stderr.write(`[hook warning] workflow.run.terminated exited ${hook.exit_code}\n`)
+      }
+    }
+  }
 }
 
 export const workflowFailCommand: Command = async (ctx, args, flags) => {
@@ -187,6 +254,20 @@ export const workflowFailCommand: Command = async (ctx, args, flags) => {
     reason ? { reason } : undefined,
   )
   output(ctx, t, (t) => `Failed: ${t.node_id} (pass ${t.pass})`)
+
+  const terminated = await maybeFireTerminated(rt, runId, ctx)
+  if (terminated !== null) {
+    output(ctx, terminated, formatWorkflowRunTerminated)
+    const hook = terminated.hook
+    if (hook !== undefined && hook.ran) {
+      if (hook.stderr.length > 0) process.stderr.write(hook.stderr)
+      if (hook.error !== undefined) {
+        process.stderr.write(`[hook warning] workflow.run.terminated: ${hook.error}\n`)
+      } else if (hook.exit_code !== null && hook.exit_code !== 0) {
+        process.stderr.write(`[hook warning] workflow.run.terminated exited ${hook.exit_code}\n`)
+      }
+    }
+  }
 }
 
 export const workflowHistoryCommand: Command = async (ctx, args) => {
