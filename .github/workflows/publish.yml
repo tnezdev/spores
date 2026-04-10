@@ -31,6 +31,9 @@ jobs:
       - name: Test
         run: bun test
 
+      - name: Smoke test (consumer install from tarball)
+        run: bash scripts/smoke-test.sh
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
