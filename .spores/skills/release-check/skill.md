@@ -63,9 +63,12 @@ If the workflow fails:
 
 ```bash
 npm view @tnezdev/spores version
+bash scripts/post-publish-check.sh X.Y.Z
 ```
 
-Should print the version you just tagged. If it lags, wait 30 seconds and retry — npm registry propagation.
+`npm view` should print the version you just tagged. If it lags, wait 30 seconds and retry — npm registry propagation.
+
+Then run the post-publish check — it installs the package from the registry in a temp dir and verifies all public API exports load under Bun. Pass the explicit version since `latest` may not have propagated yet.
 
 Also spot-check provenance on https://www.npmjs.com/package/@tnezdev/spores — the published version should show a "Built and signed on GitHub Actions" badge linking back to the workflow run. That badge is the whole point of OIDC; its absence means provenance attestation didn't attach and is worth investigating.
 

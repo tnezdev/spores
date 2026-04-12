@@ -31,7 +31,7 @@
     {
       "id": "verify-registry",
       "label": "Verify registry + provenance",
-      "description": "npm view @tnezdev/spores version matches tag; npmjs.com page shows 'Built and signed on GitHub Actions' provenance badge",
+      "description": "npm view @tnezdev/spores version matches tag; run 'bash scripts/post-publish-check.sh <version>' to verify consumer install from registry; check npmjs.com page for 'Built and signed on GitHub Actions' provenance badge",
       "artifact_type": "registry-check"
     }
   ],
