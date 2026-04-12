@@ -83,7 +83,7 @@ function applyToml(config: SporesConfig, doc: TomlDoc): SporesConfig {
 
   const wake = doc["wake"]
   if (typeof wake === "object") {
-    if (wake["identity"] !== undefined) result.wake.identity = wake["identity"]
+    if (wake["template"] !== undefined) result.wake.template = wake["template"]
   }
 
   return result

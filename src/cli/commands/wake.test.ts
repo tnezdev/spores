@@ -33,6 +33,12 @@ async function runWakeJson(
   return JSON.parse(stdout)
 }
 
+async function writeConfig(baseDir: string, toml: string): Promise<void> {
+  const configDir = join(baseDir, ".spores")
+  await mkdir(configDir, { recursive: true })
+  await writeFile(join(configDir, "config.toml"), toml)
+}
+
 describe("wake", () => {
   let tmpDir: string
 
@@ -44,109 +50,106 @@ describe("wake", () => {
     await rm(tmpDir, { recursive: true })
   })
 
-  it("outputs environment even with no config", async () => {
-    const result = (await runWakeJson(tmpDir)) as {
-      situational: { hostname: string; cwd: string; timestamp: string }
-      personas: unknown[]
-    }
-    expect(result.situational.hostname).toBeDefined()
-    expect(result.situational.cwd).toBe(tmpDir)
-    expect(result.situational.timestamp).toBeDefined()
-    expect(result.personas).toEqual([])
-  })
-
-  it("human mode shows no-identity hint when unconfigured", async () => {
+  it("outputs default template when unconfigured", async () => {
     const { stdout, exitCode } = await runWake(tmpDir)
     expect(exitCode).toBe(0)
-    expect(stdout).toContain("no identity configured")
+    expect(stdout).toContain("no wake template configured")
+    expect(stdout).toContain("# Environment")
   })
 
-  it("reads identity file when configured", async () => {
-    const identityContent = "# Test Agent\n\nI am a test agent."
-    await writeFile(join(tmpDir, "identity.md"), identityContent)
-
-    const configDir = join(tmpDir, ".spores")
-    await mkdir(configDir, { recursive: true })
+  it("renders static tokens in template", async () => {
     await writeFile(
-      join(configDir, "config.toml"),
-      '[wake]\nidentity = "identity.md"\n',
+      join(tmpDir, "WAKE.md"),
+      "host={{hostname}} cwd={{cwd}} branch={{git_branch}} time={{timestamp}}",
     )
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
 
     const result = (await runWakeJson(tmpDir)) as {
-      identity: string
-      identity_path: string
+      rendered: string
+      situational: { hostname: string; cwd: string }
     }
-    expect(result.identity).toBe(identityContent)
-    expect(result.identity_path).toBe(join(tmpDir, "identity.md"))
+    expect(result.rendered).toContain(`host=${result.situational.hostname}`)
+    expect(result.rendered).toContain(`cwd=${tmpDir}`)
+    expect(result.rendered).not.toContain("{{hostname}}")
+    expect(result.rendered).not.toContain("{{cwd}}")
   })
 
-  it("identity is undefined when file does not exist", async () => {
-    const configDir = join(tmpDir, ".spores")
-    await mkdir(configDir, { recursive: true })
+  it("executes {{sh:...}} expressions", async () => {
     await writeFile(
-      join(configDir, "config.toml"),
-      '[wake]\nidentity = "missing.md"\n',
+      join(tmpDir, "WAKE.md"),
+      "name={{sh:echo hello-world}}",
     )
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
+
+    const result = (await runWakeJson(tmpDir)) as { rendered: string }
+    expect(result.rendered).toBe("name=hello-world")
+  })
+
+  it("{{sh:cat ...}} inlines file content", async () => {
+    await writeFile(join(tmpDir, "identity.md"), "# I am the agent")
+    await writeFile(
+      join(tmpDir, "WAKE.md"),
+      "{{sh:cat identity.md}}\n\nMore content.",
+    )
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
+
+    const result = (await runWakeJson(tmpDir)) as { rendered: string }
+    expect(result.rendered).toContain("# I am the agent")
+    expect(result.rendered).toContain("More content.")
+  })
+
+  it("shows error inline when shell command fails", async () => {
+    await writeFile(
+      join(tmpDir, "WAKE.md"),
+      "result={{sh:cat nonexistent-file.txt}}",
+    )
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
+
+    const result = (await runWakeJson(tmpDir)) as { rendered: string }
+    // Should contain error text, not crash
+    expect(result.rendered).toContain("result=")
+    expect(result.rendered).toContain("No such file")
+  })
+
+  it("shell commands run with cwd set to baseDir", async () => {
+    await writeFile(join(tmpDir, "marker.txt"), "cwd-ok")
+    await writeFile(join(tmpDir, "WAKE.md"), "{{sh:cat marker.txt}}")
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
+
+    const result = (await runWakeJson(tmpDir)) as { rendered: string }
+    expect(result.rendered).toBe("cwd-ok")
+  })
+
+  it("template_path is set in JSON output", async () => {
+    await writeFile(join(tmpDir, "WAKE.md"), "hello")
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
 
     const result = (await runWakeJson(tmpDir)) as {
-      identity?: string
-      identity_path: string
+      template_path: string
     }
-    expect(result.identity).toBeUndefined()
-    expect(result.identity_path).toBe(join(tmpDir, "missing.md"))
+    expect(result.template_path).toBe(join(tmpDir, "WAKE.md"))
   })
 
-  it("supports absolute identity path", async () => {
-    const identityFile = join(tmpDir, "elsewhere", "me.md")
-    await mkdir(join(tmpDir, "elsewhere"), { recursive: true })
-    await writeFile(identityFile, "I exist elsewhere.")
-
-    const configDir = join(tmpDir, ".spores")
-    await mkdir(configDir, { recursive: true })
-    await writeFile(
-      join(configDir, "config.toml"),
-      `[wake]\nidentity = "${identityFile}"\n`,
+  it("supports absolute template path", async () => {
+    const elsewhere = join(tmpDir, "elsewhere")
+    await mkdir(elsewhere, { recursive: true })
+    await writeFile(join(elsewhere, "boot.md"), "booted from {{hostname}}")
+    await writeConfig(
+      tmpDir,
+      `[wake]\ntemplate = "${join(elsewhere, "boot.md")}"\n`,
     )
 
-    const result = (await runWakeJson(tmpDir)) as {
-      identity: string
-      identity_path: string
-    }
-    expect(result.identity).toBe("I exist elsewhere.")
-    expect(result.identity_path).toBe(identityFile)
+    const result = (await runWakeJson(tmpDir)) as { rendered: string }
+    expect(result.rendered).not.toContain("{{hostname}}")
+    expect(result.rendered).toContain("booted from")
   })
 
-  it("lists project personas", async () => {
-    const personaDir = join(tmpDir, ".spores", "personas")
-    await mkdir(personaDir, { recursive: true })
-    await writeFile(
-      join(personaDir, "developer.md"),
-      "---\nname: developer\ndescription: Write code\n---\n\nYou write code.\n",
-    )
+  it("unknown tokens are left literal", async () => {
+    await writeFile(join(tmpDir, "WAKE.md"), "keep={{unknown_token}}")
+    await writeConfig(tmpDir, '[wake]\ntemplate = "WAKE.md"\n')
 
-    const result = (await runWakeJson(tmpDir)) as {
-      personas: Array<{ name: string; description: string }>
-    }
-    expect(result.personas).toHaveLength(1)
-    expect(result.personas[0]!.name).toBe("developer")
-    expect(result.personas[0]!.description).toBe("Write code")
-  })
-
-  it("human mode shows identity content first", async () => {
-    await writeFile(join(tmpDir, "me.md"), "# I am the agent")
-    const configDir = join(tmpDir, ".spores")
-    await mkdir(configDir, { recursive: true })
-    await writeFile(
-      join(configDir, "config.toml"),
-      '[wake]\nidentity = "me.md"\n',
-    )
-
-    const { stdout, exitCode } = await runWake(tmpDir)
-    expect(exitCode).toBe(0)
-    // Identity should appear before environment
-    const identityPos = stdout.indexOf("I am the agent")
-    const envPos = stdout.indexOf("# Environment")
-    expect(identityPos).toBeLessThan(envPos)
+    const result = (await runWakeJson(tmpDir)) as { rendered: string }
+    expect(result.rendered).toBe("keep={{unknown_token}}")
   })
 
   it("fires wake.completed hook", async () => {
@@ -155,7 +158,7 @@ describe("wake", () => {
     const hookPath = join(hookDir, "wake.completed")
     await writeFile(
       hookPath,
-      '#!/usr/bin/env bash\necho "event=$SPORES_EVENT"\necho "personas=$SPORES_WAKE_PERSONA_COUNT"\n',
+      '#!/usr/bin/env bash\necho "event=$SPORES_EVENT"\n',
     )
     await chmod(hookPath, 0o755)
 
@@ -165,6 +168,5 @@ describe("wake", () => {
     expect(result.hook.ran).toBe(true)
     expect(result.hook.exit_code).toBe(0)
     expect(result.hook.stdout).toContain("event=wake.completed")
-    expect(result.hook.stdout).toContain("personas=0")
   })
 })
