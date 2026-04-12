@@ -14,6 +14,7 @@ const DEFAULTS: SporesConfig = {
     graphsDir: ".spores/workflows",
     runsDir: ".spores/runs",
   },
+  wake: {},
 }
 
 type TomlSection = Record<string, string>
@@ -58,6 +59,7 @@ function applyToml(config: SporesConfig, doc: TomlDoc): SporesConfig {
     ...config,
     memory: { ...config.memory },
     workflow: { ...config.workflow },
+    wake: { ...config.wake },
   }
 
   if (typeof doc["adapter"] === "string") {
@@ -79,6 +81,11 @@ function applyToml(config: SporesConfig, doc: TomlDoc): SporesConfig {
     if (wf["runs_dir"] !== undefined) result.workflow.runsDir = wf["runs_dir"]
   }
 
+  const wake = doc["wake"]
+  if (typeof wake === "object") {
+    if (wake["identity"] !== undefined) result.wake.identity = wake["identity"]
+  }
+
   return result
 }
 
@@ -92,7 +99,7 @@ async function tryReadToml(path: string): Promise<TomlDoc | undefined> {
 }
 
 export async function loadConfig(baseDir: string): Promise<SporesConfig> {
-  let config = { ...DEFAULTS, memory: { ...DEFAULTS.memory }, workflow: { ...DEFAULTS.workflow } }
+  let config = { ...DEFAULTS, memory: { ...DEFAULTS.memory }, workflow: { ...DEFAULTS.workflow }, wake: { ...DEFAULTS.wake } }
 
   const globalToml = await tryReadToml(
     join(homedir(), ".spores", "config.toml"),

@@ -21,6 +21,7 @@ function makeCtx(baseDir: string): Ctx {
       graphsDir: ".spores/workflow/graphs",
       runsDir: ".spores/workflow/runs",
     },
+    wake: {},
   }
   return {
     adapter: new FilesystemAdapter(baseDir),

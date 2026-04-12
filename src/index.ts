@@ -30,6 +30,7 @@ export type {
   WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
   WorkflowRunTransitionedOutput,
+  WakeOutput,
 } from "./types.js"
 
 export type { MemoryAdapter, AdapterCapabilities } from "./memory/adapter.js"

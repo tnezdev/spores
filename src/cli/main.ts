@@ -44,6 +44,7 @@ import {
   personaViewCommand,
   personaActivateCommand,
 } from "./commands/persona.js"
+import { wakeCommand } from "./commands/wake.js"
 
 type Parsed = {
   positional: string[]
@@ -111,6 +112,7 @@ const commands: Record<string, Command> = {
   "persona list": personaListCommand,
   "persona view": personaViewCommand,
   "persona activate": personaActivateCommand,
+  wake: wakeCommand,
 }
 
 const USAGE = `Usage: spores <command> [args] [flags]
@@ -150,6 +152,8 @@ Commands:
   persona list                        List available personas
   persona view <name>                 Show raw persona (no substitution)
   persona activate <name>             Render persona with live facts (pipe to LLM)
+
+  wake                                Session bootstrap — identity, environment, personas
 
 Flags:
   --json                              Output as JSON
