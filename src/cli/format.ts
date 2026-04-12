@@ -26,6 +26,7 @@ import type {
   WorkflowRunTransitionedOutput,
   PersonaFile,
   PersonaRef,
+  WakeOutput,
 } from "../types.js"
 
 export function formatMemory(m: Memory): string {
@@ -400,4 +401,61 @@ export function formatPersonaActivation(
     parts.push(hook.stdout.trimEnd())
   }
   return parts.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Wake formatters
+// ---------------------------------------------------------------------------
+
+/**
+ * Human formatter for `spores wake`. Output is designed to be consumed by an
+ * LLM at session start — readable, structured, and complete. Identity content
+ * comes first (the most important context), then environment, then available
+ * personas as a table with descriptions that serve as activation hints.
+ * Design: tnezdev/spores#34.
+ */
+export function formatWake(result: WakeOutput): string {
+  const sections: string[] = []
+
+  // Identity
+  if (result.identity !== undefined) {
+    sections.push(result.identity.trimEnd())
+  } else {
+    sections.push(
+      "(no identity configured — set [wake] identity in .spores/config.toml)",
+    )
+  }
+
+  // Environment
+  const env = result.situational
+  const envLines = [
+    "# Environment",
+    "",
+    `hostname: ${env.hostname}`,
+    `cwd: ${env.cwd}`,
+  ]
+  if (env.git_branch !== undefined) {
+    envLines.push(`branch: ${env.git_branch}`)
+  }
+  envLines.push(`time: ${env.timestamp}`)
+  sections.push(envLines.join("\n"))
+
+  // Personas
+  if (result.personas.length > 0) {
+    const personaLines = ["# Available personas", ""]
+    personaLines.push(
+      formatPersonaRefs(result.personas, true),
+    )
+    sections.push(personaLines.join("\n"))
+  } else {
+    sections.push("# Available personas\n\nNone found.")
+  }
+
+  // Hook output
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    sections.push(hook.stdout.trimEnd())
+  }
+
+  return sections.join("\n\n---\n\n")
 }

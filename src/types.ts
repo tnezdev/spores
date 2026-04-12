@@ -39,6 +39,9 @@ export type SporesConfig = {
     graphsDir: string
     runsDir: string
   }
+  wake: {
+    identity?: string | undefined // path to identity file (absolute or relative to baseDir)
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -397,5 +400,23 @@ export type WorkflowRunTransitionedOutput = {
   from_status: NodeStatus
   to_status: NodeStatus
   pass: number
+  hook?: HookInvocation | undefined
+}
+
+// ---------------------------------------------------------------------------
+// Wake types
+// ---------------------------------------------------------------------------
+
+/**
+ * Output of `spores wake` — everything an agent needs to self-orient at
+ * session start. The identity content is the raw text of the configured
+ * identity file. Personas are listed as refs so the agent can decide which
+ * to activate. Design: tnezdev/spores#34.
+ */
+export type WakeOutput = {
+  identity?: string | undefined // contents of the identity file, if configured
+  identity_path?: string | undefined // resolved path to the identity file
+  situational: SituationalContext
+  personas: PersonaRef[]
   hook?: HookInvocation | undefined
 }
