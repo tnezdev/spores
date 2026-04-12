@@ -1,6 +1,6 @@
 {
   "name": "@tnezdev/spores",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Executable toolbelt for agent self-improvement",
   "license": "MIT",
   "type": "module",

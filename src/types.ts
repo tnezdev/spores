@@ -40,7 +40,7 @@ export type SporesConfig = {
     runsDir: string
   }
   wake: {
-    identity?: string | undefined // path to identity file (absolute or relative to baseDir)
+    template?: string | undefined // path to WAKE.md template (absolute or relative to baseDir)
   }
 }
 
@@ -414,9 +414,8 @@ export type WorkflowRunTransitionedOutput = {
  * to activate. Design: tnezdev/spores#34.
  */
 export type WakeOutput = {
-  identity?: string | undefined // contents of the identity file, if configured
-  identity_path?: string | undefined // resolved path to the identity file
+  rendered: string // fully resolved template output
+  template_path?: string | undefined // resolved path to the template file
   situational: SituationalContext
-  personas: PersonaRef[]
   hook?: HookInvocation | undefined
 }
