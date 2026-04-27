@@ -253,6 +253,75 @@ export type Persona = PersonaRef & {
 }
 
 // ---------------------------------------------------------------------------
+// Dispatch types
+//
+// A Dispatch is a message that crosses a boundary into an agent's turn:
+// from another agent (PA→ORG, ORG→PA), from a surface (Slack, email),
+// from a scheduler (recurring or one-shot wakes), or addressed to self.
+// Spores ships the message shape and pure match logic; the runtime
+// (caller) ships transport, scheduling, and handler execution.
+//
+// See PROJECTS/spores/DESIGN-runtime-description.md §"Dispatch primitive
+// shape" for the full design.
+// ---------------------------------------------------------------------------
+
+/** ULID-shaped identifier. Same monotonic-factory shape as Task.id. */
+export type DispatchId = string
+
+/**
+ * The message shape that crosses every boundary into an agent's turn.
+ * `from` and `to` are runtime-assigned addresses (e.g. `pa:user-x`,
+ * `org:channel-y`, `scheduler`, `self`, `surface:slack`); the convention
+ * is colon-separated kind:identifier but spores does not enforce it —
+ * callers can use whatever address scheme their runtime prefers.
+ *
+ * `when` and `recurrence` are *delivery metadata* — sender-side scheduling.
+ * The scheduler is just the runtime executor of recurring sends; from the
+ * handler's perspective, every dispatch arrives the same way regardless
+ * of source (scheduled, surface, agent-to-agent).
+ */
+export type Dispatch = {
+  id: DispatchId
+  from: string
+  to: string
+  payload: unknown
+  timestamp: string // ISO 8601 — when the dispatch was emitted
+  when?: string | undefined // ISO 8601 — deferred delivery
+  recurrence?: string | undefined // cron expression or ISO 8601 duration
+}
+
+/**
+ * Declarative predicate over `from` and `to`. A string matches by equality;
+ * a string array matches by inclusion (one-of). An undefined field places
+ * no constraint. An empty filter matches every dispatch.
+ *
+ * Payload-shape matching is intentionally absent at the foundation layer:
+ * payload schemas are source-specific, and a one-size predicate language
+ * would force premature decisions. Callers needing payload matching can
+ * compose a function filter `(d) => match(d, baseFilter) && payloadCheck(d)`
+ * outside this module.
+ */
+export type DispatchFilter = {
+  from?: string | readonly string[] | undefined
+  to?: string | readonly string[] | undefined
+}
+
+/**
+ * Lifecycle hooks attached at handler registration. `onRegister` runs once
+ * when the handler is brought up (idempotency is the registrar's
+ * responsibility — spores stays stateless about prior runs). `onUnregister`
+ * runs once at teardown. Both default to no-op when omitted.
+ *
+ * The caller (runtime) decides *when* to fire `onRegister` — at process
+ * boot for long-running daemons, at deploy time for serverless. Spores
+ * ships the hook shape; the runtime owns the policy.
+ */
+export type DispatchHandlerHooks = {
+  onRegister?: () => Promise<void>
+  onUnregister?: () => Promise<void>
+}
+
+// ---------------------------------------------------------------------------
 // Hook types
 // ---------------------------------------------------------------------------
 

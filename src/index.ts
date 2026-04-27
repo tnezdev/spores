@@ -27,6 +27,10 @@ export type {
   Persona,
   RoutingHint,
   SituationalContext,
+  DispatchId,
+  Dispatch,
+  DispatchFilter,
+  DispatchHandlerHooks,
   HookInvocation,
   WorkflowRunStartedOutput,
   WorkflowRunTerminatedOutput,
@@ -68,5 +72,7 @@ export type { Source, SourceRecord } from "./sources/source.js"
 export { InMemorySource } from "./sources/in-memory.js"
 export { FlatFileSource } from "./sources/flat-file.js"
 export { LayeredSource } from "./sources/layered.js"
+
+export { match as matchDispatch } from "./dispatch/match.js"
 
 export { fireHook } from "./hooks/fire.js"
