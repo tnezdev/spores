@@ -365,6 +365,8 @@ function formatMeta(ref: PersonaRef): string {
   if (ref.task_filter !== undefined)
     lines.push(`task_filter: ${JSON.stringify(ref.task_filter)}`)
   if (ref.workflow !== undefined) lines.push(`workflow: ${ref.workflow}`)
+  if (ref.effort !== undefined) lines.push(`effort: ${ref.effort}`)
+  if (ref.reasoning !== undefined) lines.push(`reasoning: ${ref.reasoning}`)
   return lines.join("\n")
 }
 

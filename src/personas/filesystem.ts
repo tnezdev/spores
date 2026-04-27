@@ -1,6 +1,12 @@
 import { join } from "node:path"
 import { homedir } from "node:os"
-import type { PersonaFile, PersonaRef, TaskQuery, TaskStatus } from "../types.js"
+import type {
+  PersonaFile,
+  PersonaRef,
+  RoutingHint,
+  TaskQuery,
+  TaskStatus,
+} from "../types.js"
 import type { Source } from "../sources/source.js"
 import { FlatFileSource } from "../sources/flat-file.js"
 import { LayeredSource } from "../sources/layered.js"
@@ -35,6 +41,8 @@ type ParsedMeta = {
   skills?: string[]
   task_filter?: TaskQuery
   workflow?: string
+  effort?: RoutingHint
+  reasoning?: RoutingHint
 }
 
 const TASK_STATUSES: readonly TaskStatus[] = [
@@ -47,6 +55,12 @@ const TASK_STATUSES: readonly TaskStatus[] = [
 
 function isTaskStatus(s: string): s is TaskStatus {
   return (TASK_STATUSES as readonly string[]).includes(s)
+}
+
+const ROUTING_HINTS: readonly RoutingHint[] = ["low", "medium", "high"]
+
+function isRoutingHint(s: string): s is RoutingHint {
+  return (ROUTING_HINTS as readonly string[]).includes(s)
 }
 
 function parseArray(rest: string): string[] {
@@ -120,6 +134,8 @@ function parseFrontmatter(text: string): { meta: ParsedMeta; body: string } {
     if (key === "name") meta.name = value
     else if (key === "description") meta.description = value
     else if (key === "workflow") meta.workflow = value
+    else if (key === "effort" && isRoutingHint(value)) meta.effort = value
+    else if (key === "reasoning" && isRoutingHint(value)) meta.reasoning = value
   }
 
   if (Object.keys(taskFilter).length > 0) {
@@ -138,6 +154,8 @@ function metaToRef(meta: ParsedMeta): PersonaRef | undefined {
     skills: meta.skills ?? [],
     task_filter: meta.task_filter,
     workflow: meta.workflow,
+    effort: meta.effort,
+    reasoning: meta.reasoning,
   }
 }
 

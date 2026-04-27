@@ -348,6 +348,54 @@ describe("loadPersonaFromSource", () => {
   })
 })
 
+describe("routing hints", () => {
+  test("parses effort and reasoning when both present and valid", async () => {
+    const source = new InMemorySource({
+      hinted: `---\nname: hinted\ndescription: with hints\neffort: high\nreasoning: medium\n---\nbody\n`,
+    })
+    const file = await loadPersonaFromSource("hinted", source)
+    expect(file!.effort).toBe("high")
+    expect(file!.reasoning).toBe("medium")
+  })
+
+  test("hints default to undefined when frontmatter omits them", async () => {
+    const source = new InMemorySource({ minimal: MINIMAL })
+    const file = await loadPersonaFromSource("minimal", source)
+    expect(file!.effort).toBeUndefined()
+    expect(file!.reasoning).toBeUndefined()
+  })
+
+  test("invalid hint values are dropped, persona still loads", async () => {
+    const source = new InMemorySource({
+      bad: `---\nname: bad\ndescription: bad hints\neffort: insane\nreasoning: galaxy-brain\n---\nbody\n`,
+    })
+    const file = await loadPersonaFromSource("bad", source)
+    expect(file).toBeDefined()
+    expect(file!.effort).toBeUndefined()
+    expect(file!.reasoning).toBeUndefined()
+  })
+
+  test("accepts each valid hint level", async () => {
+    for (const level of ["low", "medium", "high"]) {
+      const source = new InMemorySource({
+        p: `---\nname: p\ndescription: d\neffort: ${level}\nreasoning: ${level}\n---\n`,
+      })
+      const file = await loadPersonaFromSource("p", source)
+      expect(file!.effort).toBe(level as "low" | "medium" | "high")
+      expect(file!.reasoning).toBe(level as "low" | "medium" | "high")
+    }
+  })
+
+  test("listPersonasFromSource surfaces hints in refs", async () => {
+    const source = new InMemorySource({
+      hinted: `---\nname: hinted\ndescription: d\neffort: low\nreasoning: high\n---\n`,
+    })
+    const refs = await listPersonasFromSource(source)
+    expect(refs[0]!.effort).toBe("low")
+    expect(refs[0]!.reasoning).toBe("high")
+  })
+})
+
 describe("listPersonasFromSource", () => {
   test("lists personas from any source", async () => {
     const source = new InMemorySource({
