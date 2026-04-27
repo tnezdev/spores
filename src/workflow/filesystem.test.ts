@@ -3,7 +3,13 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import type { GraphDef, Transition } from "../types.js"
-import { FilesystemWorkflowAdapter } from "./filesystem.js"
+import { InMemorySource } from "../sources/in-memory.js"
+import { LayeredSource } from "../sources/layered.js"
+import {
+  FilesystemWorkflowAdapter,
+  listGraphsFromSource,
+  loadGraphFromSource,
+} from "./filesystem.js"
 
 function makeGraph(id = "g1"): GraphDef {
   return {
@@ -173,5 +179,73 @@ describe("FilesystemWorkflowAdapter", () => {
       expect(loaded!.history).toHaveLength(1)
       expect(loaded!.history[0]).toEqual(t)
     })
+  })
+})
+
+describe("loadGraphFromSource", () => {
+  it("loads a graph from any source — no filesystem coupling", async () => {
+    const graph = makeGraph()
+    const source = new InMemorySource({ g1: JSON.stringify(graph) }, "test")
+    const loaded = await loadGraphFromSource("g1", source)
+    expect(loaded).toEqual(graph)
+  })
+
+  it("returns undefined when source has no record by that id", async () => {
+    const source = new InMemorySource({})
+    const loaded = await loadGraphFromSource("missing", source)
+    expect(loaded).toBeUndefined()
+  })
+
+  it("layered source: live state shadows seed", async () => {
+    const seedGraph = { ...makeGraph(), name: "Seed" }
+    const liveGraph = { ...makeGraph(), name: "Live" }
+    const seed = new InMemorySource(
+      { g1: JSON.stringify(seedGraph) },
+      "seed",
+    )
+    const live = new InMemorySource(
+      { g1: JSON.stringify(liveGraph) },
+      "live",
+    )
+    const layered = new LayeredSource([live, seed])
+    const loaded = await loadGraphFromSource("g1", layered)
+    expect(loaded!.name).toBe("Live")
+  })
+
+  it("throws on malformed JSON", async () => {
+    const source = new InMemorySource({ g1: "not valid json" })
+    expect(loadGraphFromSource("g1", source)).rejects.toThrow()
+  })
+})
+
+describe("listGraphsFromSource", () => {
+  it("lists all compiled graphs from a source", async () => {
+    const a = { ...makeGraph("a"), name: "Alpha" }
+    const b = { ...makeGraph("b"), name: "Beta" }
+    const source = new InMemorySource({
+      a: JSON.stringify(a),
+      b: JSON.stringify(b),
+    })
+    const graphs = await listGraphsFromSource(source)
+    const names = graphs.map((g) => g.name).sort()
+    expect(names).toEqual(["Alpha", "Beta"])
+  })
+
+  it("skips records whose names end in .source", async () => {
+    const compiled = makeGraph("g1")
+    const sourceForm = { ...makeGraph("g1"), name: "un-expanded" }
+    const source = new InMemorySource({
+      g1: JSON.stringify(compiled),
+      "g1.source": JSON.stringify(sourceForm),
+    })
+    const graphs = await listGraphsFromSource(source)
+    expect(graphs).toHaveLength(1)
+    expect(graphs[0]!.id).toBe("g1")
+    expect(graphs[0]!.name).toBe("Test Graph")
+  })
+
+  it("returns empty array from empty source", async () => {
+    const graphs = await listGraphsFromSource(new InMemorySource({}))
+    expect(graphs).toEqual([])
   })
 })
