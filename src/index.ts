@@ -56,9 +56,16 @@ export type { PersonaAdapter } from "./personas/adapter.js"
 export {
   FilesystemPersonaAdapter,
   listPersonas,
+  listPersonasFromSource,
   loadPersona,
+  loadPersonaFromSource,
 } from "./personas/filesystem.js"
 export { activatePersona } from "./personas/activate.js"
 export { resolveSituational } from "./personas/situational.js"
+
+export type { Source, SourceRecord } from "./sources/source.js"
+export { InMemorySource } from "./sources/in-memory.js"
+export { FlatFileSource } from "./sources/flat-file.js"
+export { LayeredSource } from "./sources/layered.js"
 
 export { fireHook } from "./hooks/fire.js"
