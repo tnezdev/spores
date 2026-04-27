@@ -25,6 +25,7 @@ export type {
   PersonaRef,
   PersonaFile,
   Persona,
+  RoutingHint,
   SituationalContext,
   HookInvocation,
   WorkflowRunStartedOutput,

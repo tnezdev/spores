@@ -200,12 +200,26 @@ export type SituationalContext = {
 }
 
 /**
+ * Routing hint — advisory shape used by callers (run orchestrators) to map
+ * a persona to an LLM model and provider. Spores never binds a persona to
+ * a model directly; the routing layer owns that decision plus guardrails,
+ * observability, and provider fallback. Three levels are enough vocabulary
+ * to start; expand only when a real workload demands it.
+ */
+export type RoutingHint = "low" | "medium" | "high"
+
+/**
  * Metadata-only persona reference — cheap to list. Frontmatter fields only,
  * no body content. Used by `listPersonas()` and by callers scanning the
  * persona catalog for activation targets.
  *
  * Descriptions should be phrased as activation triggers ("Activate when...")
  * rather than labels ("The X maintainer") — they're agent-facing lookup hooks.
+ *
+ * `effort` and `reasoning` are advisory hints — see `RoutingHint`. The
+ * persona declares what it wants; the routing layer decides what model
+ * gets it. Personas never name models directly: a persona can edit itself,
+ * so capability-shaping fields belong outside the editable surface.
  */
 export type PersonaRef = {
   name: string
@@ -214,6 +228,8 @@ export type PersonaRef = {
   skills: string[]
   task_filter?: TaskQuery | undefined
   workflow?: string | undefined
+  effort?: RoutingHint | undefined
+  reasoning?: RoutingHint | undefined
 }
 
 /**
