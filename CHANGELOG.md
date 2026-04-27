@@ -2,6 +2,29 @@
 
 All notable changes to `@tnezdev/spores`. Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [semver](https://semver.org/).
 
+## 0.4.1 — 2026-04-27
+
+The Workers/Node release. Lifts the Bun-only constraint and ships three new `Source` implementations covering the storage backends Cloudflare Workers consumers need.
+
+### Added
+
+- **Node + V8-isolate consumption.** `tsc` build pipeline emits compiled `.js` + `.d.ts` to `dist/` on every pack. Node, Cloudflare Workers, Vercel Edge, and any other non-Bun runtime can now consume `@tnezdev/spores` from npm directly. Bun consumers are unaffected — the package entry resolves to the same compiled output. (closes #32)
+- **`HttpSource`** — universal `fetch`-based source. Auth-agnostic (callers inject custom fetcher for SigV4 / bearer tokens / etc.). Optional `listFromIndex` callback for upstreams that expose enumeration.
+- **`R2BucketSource`** — Cloudflare R2 binding wrapper. In-process reads inside Workers, automatic cursor pagination on `list()`. For external-to-Workers consumers, prefer `HttpSource` with an S3-compatible signed fetcher.
+- **`KvSource`** — Cloudflare KV namespace binding wrapper. Cursor pagination via `list_complete`. Default empty `ext` (KV doesn't have file extensions natively).
+
+### Changed
+
+- Bun + Node smoke tests now run in CI on every PR (previously only on publish).
+- `prepack` script auto-builds before `npm pack` — packing always ships fresh `dist/`.
+- `scripts/smoke-consumer.mjs` replaces `smoke-consumer.ts` — plain JS runs identically under both Bun and Node.
+
+### Notes
+
+- The CLI bin entry (`bin: ./src/cli/main.ts`) remains Bun-only. CLI changes are out of scope; library consumption is the priority.
+- `fireHook` and `wake/resolve` internally use `Bun.spawn`. The modules import cleanly on Node, but invoking these specific functions on Node fails at runtime. Migration to `node:child_process` is deferred — Workers can't run child processes regardless of API choice.
+- Compass on Workers: `FlatFileSource` and `NestedFileSource` (which use `node:fs`) won't work; use `R2BucketSource` / `KvSource` / `HttpSource` instead. Pure pieces (`InMemorySource`, `LayeredSource`, `matchDispatch`, `activatePersona`, parsers, all types) port cleanly.
+
 ## 0.4.0 — 2026-04-27
 
 The boundary-work release. Compass and other remote runtimes can now load every config-style primitive from any storage backend, and Dispatch foundation types pin the universal inbound message shape. All additions are backward-compatible.
