@@ -2,10 +2,14 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import { InMemorySource } from "../sources/in-memory.js"
+import { LayeredSource } from "../sources/layered.js"
 import {
   FilesystemPersonaAdapter,
   listPersonas,
+  listPersonasFromSource,
   loadPersona,
+  loadPersonaFromSource,
 } from "./filesystem.js"
 
 // We override HOME so the "global" personas dir points into a scratch tmp
@@ -282,5 +286,100 @@ describe("FilesystemPersonaAdapter", () => {
     expect(refs).toHaveLength(1)
     const file = await adapter.loadPersona("minimal")
     expect(file!.name).toBe("minimal")
+  })
+})
+
+describe("loadPersonaFromSource", () => {
+  test("loads a persona from any source — no filesystem coupling", async () => {
+    const source = new InMemorySource({ minimal: MINIMAL }, "test")
+    const file = await loadPersonaFromSource("minimal", source)
+    expect(file!.name).toBe("minimal")
+    expect(file!.description).toBe("Activate for minimal test coverage")
+    expect(file!.body.trim()).toBe("Body text.")
+    expect(file!.path).toBe("test:minimal")
+  })
+
+  test("returns undefined when the source has no record by that name", async () => {
+    const source = new InMemorySource({ alpha: MINIMAL })
+    const file = await loadPersonaFromSource("missing", source)
+    expect(file).toBeUndefined()
+  })
+
+  test("returns undefined when frontmatter is missing required fields", async () => {
+    const source = new InMemorySource({
+      broken: `---\ndescription: No name here\n---\nbody\n`,
+    })
+    const file = await loadPersonaFromSource("broken", source)
+    expect(file).toBeUndefined()
+  })
+
+  test("layered source: live state shadows seed", async () => {
+    const seed = new InMemorySource(
+      {
+        dup: `---\nname: dup\ndescription: Seed version\n---\nseed body\n`,
+      },
+      "seed",
+    )
+    const live = new InMemorySource(
+      {
+        dup: `---\nname: dup\ndescription: Live version\n---\nlive body\n`,
+      },
+      "live",
+    )
+    const layered = new LayeredSource([live, seed])
+    const file = await loadPersonaFromSource("dup", layered)
+    expect(file!.description).toBe("Live version")
+    expect(file!.body.trim()).toBe("live body")
+    expect(file!.path).toBe("live:dup")
+  })
+
+  test("layered source: falls through to seed when live lacks the name", async () => {
+    const seed = new InMemorySource(
+      {
+        seeded: `---\nname: seeded\ndescription: From seed\n---\nbody\n`,
+      },
+      "seed",
+    )
+    const live = new InMemorySource({}, "live")
+    const layered = new LayeredSource([live, seed])
+    const file = await loadPersonaFromSource("seeded", layered)
+    expect(file!.description).toBe("From seed")
+    expect(file!.path).toBe("seed:seeded")
+  })
+})
+
+describe("listPersonasFromSource", () => {
+  test("lists personas from any source", async () => {
+    const source = new InMemorySource({
+      alpha: `---\nname: alpha\ndescription: A\n---\n`,
+      zebra: `---\nname: zebra\ndescription: Z\n---\n`,
+    })
+    const refs = await listPersonasFromSource(source)
+    expect(refs.map((r) => r.name)).toEqual(["alpha", "zebra"])
+  })
+
+  test("skips records with missing required fields", async () => {
+    const source = new InMemorySource({
+      ok: `---\nname: ok\ndescription: ok\n---\n`,
+      broken: `---\ndescription: no name\n---\n`,
+    })
+    const refs = await listPersonasFromSource(source)
+    expect(refs.map((r) => r.name)).toEqual(["ok"])
+  })
+
+  test("layered source: unions and dedupes by name (live wins on read)", async () => {
+    const seed = new InMemorySource({
+      shared: `---\nname: shared\ndescription: Seed shared\n---\n`,
+      seedOnly: `---\nname: seedOnly\ndescription: Seed only\n---\n`,
+    })
+    const live = new InMemorySource({
+      shared: `---\nname: shared\ndescription: Live shared\n---\n`,
+      liveOnly: `---\nname: liveOnly\ndescription: Live only\n---\n`,
+    })
+    const layered = new LayeredSource([live, seed])
+    const refs = await listPersonasFromSource(layered)
+    expect(refs.map((r) => r.name)).toEqual(["liveOnly", "seedOnly", "shared"])
+    const sharedRef = refs.find((r) => r.name === "shared")!
+    expect(sharedRef.description).toBe("Live shared")
   })
 })

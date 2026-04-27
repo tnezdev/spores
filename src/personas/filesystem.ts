@@ -1,21 +1,15 @@
-import { readdir, readFile } from "node:fs/promises"
 import { join } from "node:path"
 import { homedir } from "node:os"
 import type { PersonaFile, PersonaRef, TaskQuery, TaskStatus } from "../types.js"
+import type { Source } from "../sources/source.js"
+import { FlatFileSource } from "../sources/flat-file.js"
+import { LayeredSource } from "../sources/layered.js"
 import type { PersonaAdapter } from "./adapter.js"
 
 function userHome(): string {
   // Prefer HOME env var so tests can override it. Falls back to os.homedir()
   // which reads the system password database on Unix.
   return process.env["HOME"] ?? homedir()
-}
-
-interface NodeError extends Error {
-  code?: string | undefined
-}
-
-function isNodeError(err: unknown): err is NodeError {
-  return err instanceof Error
 }
 
 // ---------------------------------------------------------------------------
@@ -135,7 +129,7 @@ function parseFrontmatter(text: string): { meta: ParsedMeta; body: string } {
   return { meta, body }
 }
 
-function metaToRef(meta: ParsedMeta, path: string): PersonaRef | undefined {
+function metaToRef(meta: ParsedMeta): PersonaRef | undefined {
   if (meta.name === undefined || meta.description === undefined) return undefined
   return {
     name: meta.name,
@@ -148,7 +142,53 @@ function metaToRef(meta: ParsedMeta, path: string): PersonaRef | undefined {
 }
 
 // ---------------------------------------------------------------------------
-// Directory resolution
+// Source-based API — works with any pluggable Source
+// ---------------------------------------------------------------------------
+
+/**
+ * List all personas exposed by the given source. Skips records whose
+ * frontmatter is missing required fields (`name`, `description`) — those
+ * are surfaced quietly rather than throwing, matching `loadPersona`'s
+ * "return undefined for malformed" semantics.
+ */
+export async function listPersonasFromSource(
+  source: Source,
+): Promise<PersonaRef[]> {
+  const names = await source.list()
+  const refs: PersonaRef[] = []
+
+  for (const name of names) {
+    const record = await source.read(name)
+    if (record === undefined) continue
+
+    const { meta } = parseFrontmatter(record.text)
+    const ref = metaToRef(meta)
+    if (ref !== undefined) refs.push(ref)
+  }
+
+  return refs.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Load a single persona by name from a source. Returns undefined if the
+ * name is not found or the frontmatter is missing required fields.
+ */
+export async function loadPersonaFromSource(
+  name: string,
+  source: Source,
+): Promise<PersonaFile | undefined> {
+  const record = await source.read(name)
+  if (record === undefined) return undefined
+
+  const { meta, body } = parseFrontmatter(record.text)
+  const ref = metaToRef(meta)
+  if (ref === undefined) return undefined
+
+  return { ...ref, body, path: record.locator }
+}
+
+// ---------------------------------------------------------------------------
+// Convenience API — filesystem layering of project + global personas
 // ---------------------------------------------------------------------------
 
 function globalPersonasDir(): string {
@@ -159,79 +199,19 @@ function projectPersonasDir(baseDir: string): string {
   return join(baseDir, ".spores", "personas")
 }
 
-async function scanDir(dir: string): Promise<PersonaRef[]> {
-  let entries: string[]
-  try {
-    entries = await readdir(dir)
-  } catch (err) {
-    if (isNodeError(err) && err.code === "ENOENT") return []
-    throw err
-  }
-
-  const refs: PersonaRef[] = []
-
-  for (const entry of entries) {
-    if (!entry.endsWith(".md")) continue
-    const file = join(dir, entry)
-    let text: string
-    try {
-      text = await readFile(file, "utf-8")
-    } catch (err) {
-      if (isNodeError(err) && err.code === "ENOENT") continue
-      throw err
-    }
-
-    const { meta } = parseFrontmatter(text)
-    const ref = metaToRef(meta, file)
-    if (ref !== undefined) refs.push(ref)
-  }
-
-  return refs
+function defaultFilesystemSource(baseDir: string): Source {
+  return new LayeredSource([
+    new FlatFileSource(projectPersonasDir(baseDir), ".md"),
+    new FlatFileSource(globalPersonasDir(), ".md"),
+  ])
 }
-
-async function loadFromDir(
-  dir: string,
-  name: string,
-): Promise<PersonaFile | undefined> {
-  const file = join(dir, `${name}.md`)
-  let text: string
-  try {
-    text = await readFile(file, "utf-8")
-  } catch (err) {
-    if (isNodeError(err) && err.code === "ENOENT") return undefined
-    throw err
-  }
-
-  const { meta, body } = parseFrontmatter(text)
-  const ref = metaToRef(meta, file)
-  if (ref === undefined) return undefined
-
-  return {
-    ...ref,
-    body,
-    path: file,
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Public API — functional + class-based, mirroring skills
-// ---------------------------------------------------------------------------
 
 /**
  * List all available personas. Project personas (`.spores/personas/`) override
  * global personas (`~/.spores/personas/`) when names conflict.
  */
 export async function listPersonas(baseDir: string): Promise<PersonaRef[]> {
-  const [global, project] = await Promise.all([
-    scanDir(globalPersonasDir()),
-    scanDir(projectPersonasDir(baseDir)),
-  ])
-
-  const byName = new Map<string, PersonaRef>()
-  for (const ref of global) byName.set(ref.name, ref)
-  for (const ref of project) byName.set(ref.name, ref) // project wins
-
-  return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name))
+  return listPersonasFromSource(defaultFilesystemSource(baseDir))
 }
 
 /**
@@ -242,12 +222,7 @@ export async function loadPersona(
   name: string,
   baseDir: string,
 ): Promise<PersonaFile | undefined> {
-  const dirs = [projectPersonasDir(baseDir), globalPersonasDir()]
-  for (const dir of dirs) {
-    const file = await loadFromDir(dir, name)
-    if (file !== undefined) return file
-  }
-  return undefined
+  return loadPersonaFromSource(name, defaultFilesystemSource(baseDir))
 }
 
 /**
