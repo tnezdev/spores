@@ -82,6 +82,9 @@ export { InMemorySource } from "./sources/in-memory.js"
 export { FlatFileSource } from "./sources/flat-file.js"
 export { NestedFileSource } from "./sources/nested-file.js"
 export { LayeredSource } from "./sources/layered.js"
+export { HttpSource, type UrlForName } from "./sources/http.js"
+export { R2BucketSource } from "./sources/r2.js"
+export { KvSource } from "./sources/kv.js"
 
 export { match as matchDispatch } from "./dispatch/match.js"
 
