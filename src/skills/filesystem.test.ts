@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach, afterEach } from "bun:test"
 import { mkdtemp, rm, mkdir, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
-import { listSkills, loadSkill } from "./filesystem.js"
+import { InMemorySource } from "../sources/in-memory.js"
+import { LayeredSource } from "../sources/layered.js"
+import {
+  listSkills,
+  listSkillsFromSource,
+  loadSkill,
+  loadSkillFromSource,
+} from "./filesystem.js"
 
 async function writeSkill(
   dir: string,
@@ -33,13 +40,20 @@ Minimal body.
 
 describe("skills/filesystem", () => {
   let tmpDir: string
+  let fakeHome: string
+  const originalHome = process.env["HOME"]
 
   beforeEach(async () => {
     tmpDir = await mkdtemp(join(tmpdir(), "spores-skills-test-"))
+    fakeHome = await mkdtemp(join(tmpdir(), "spores-skills-home-"))
+    process.env["HOME"] = fakeHome
   })
 
   afterEach(async () => {
+    if (originalHome !== undefined) process.env["HOME"] = originalHome
+    else delete process.env["HOME"]
     await rm(tmpDir, { recursive: true })
+    await rm(fakeHome, { recursive: true })
   })
 
   describe("listSkills", () => {
@@ -116,6 +130,95 @@ Body.
       await writeSkill(tmpDir, "broken", noDesc)
       const skill = await loadSkill("broken", tmpDir)
       expect(skill).toBeUndefined()
+    })
+
+    it("project skill wins over global on name conflict", async () => {
+      // Write to the fake-home global skills dir
+      const globalDir = join(fakeHome, ".spores", "skills", "dup")
+      await mkdir(globalDir, { recursive: true })
+      await writeFile(
+        join(globalDir, "skill.md"),
+        `---\nname: dup\ndescription: Global\n---\nglobal body\n`,
+      )
+      await writeSkill(
+        tmpDir,
+        "dup",
+        `---\nname: dup\ndescription: Project\n---\nproject body\n`,
+      )
+      const skill = await loadSkill("dup", tmpDir)
+      expect(skill!.description).toBe("Project")
+      expect(skill!.content.trim()).toBe("project body")
+    })
+
+    it("falls back to global skill when project version is absent", async () => {
+      const globalDir = join(fakeHome, ".spores", "skills", "global-only")
+      await mkdir(globalDir, { recursive: true })
+      await writeFile(
+        join(globalDir, "skill.md"),
+        `---\nname: global-only\ndescription: Global\n---\nglobal body\n`,
+      )
+      const skill = await loadSkill("global-only", tmpDir)
+      expect(skill!.description).toBe("Global")
+    })
+  })
+
+  describe("loadSkillFromSource", () => {
+    it("loads a skill from any source — no filesystem coupling", async () => {
+      const source = new InMemorySource(
+        { "my-skill": VALID_SKILL },
+        "test",
+      )
+      const skill = await loadSkillFromSource("my-skill", source)
+      expect(skill!.name).toBe("my-skill")
+      expect(skill!.description).toBe("Does something useful")
+      expect(skill!.tags).toEqual(["ai", "memory"])
+      expect(skill!.content.trim()).toBe("Body content here.")
+      expect(skill!.path).toBe("test:my-skill")
+    })
+
+    it("returns undefined when source has no record by that name", async () => {
+      const source = new InMemorySource({})
+      const skill = await loadSkillFromSource("missing", source)
+      expect(skill).toBeUndefined()
+    })
+
+    it("layered source: live state shadows seed", async () => {
+      const seed = new InMemorySource(
+        {
+          "my-skill": `---\nname: my-skill\ndescription: Seed version\n---\nseed body\n`,
+        },
+        "seed",
+      )
+      const live = new InMemorySource(
+        {
+          "my-skill": `---\nname: my-skill\ndescription: Live version\n---\nlive body\n`,
+        },
+        "live",
+      )
+      const layered = new LayeredSource([live, seed])
+      const skill = await loadSkillFromSource("my-skill", layered)
+      expect(skill!.description).toBe("Live version")
+      expect(skill!.content.trim()).toBe("live body")
+    })
+  })
+
+  describe("listSkillsFromSource", () => {
+    it("lists skills from any source", async () => {
+      const source = new InMemorySource({
+        alpha: `---\nname: alpha\ndescription: A\n---\n`,
+        zebra: `---\nname: zebra\ndescription: Z\n---\n`,
+      })
+      const refs = await listSkillsFromSource(source)
+      expect(refs.map((r) => r.name)).toEqual(["alpha", "zebra"])
+    })
+
+    it("skips records with missing required fields", async () => {
+      const source = new InMemorySource({
+        ok: `---\nname: ok\ndescription: ok\n---\n`,
+        broken: `---\nname: broken\n---\n`,
+      })
+      const refs = await listSkillsFromSource(source)
+      expect(refs.map((r) => r.name)).toEqual(["ok"])
     })
   })
 })

@@ -2,6 +2,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises"
 import { join } from "node:path"
 import { randomUUID } from "node:crypto"
 import type { GraphDef, Run, Transition } from "../types.js"
+import type { Source } from "../sources/source.js"
 import type { WorkflowAdapter } from "./adapter.js"
 
 interface NodeError extends Error {
@@ -137,4 +138,57 @@ export class FilesystemWorkflowAdapter implements WorkflowAdapter {
     run.history.push(transition)
     await writeFile(filePath, JSON.stringify(run, null, 2))
   }
+}
+
+// ---------------------------------------------------------------------------
+// Source-based graph loading
+//
+// Compass + remote runtimes load `GraphDef`s from non-filesystem sources
+// (DB, layered seed-then-emerge). The Source abstraction handles the read
+// path; run state stays on the adapter (it's runtime data, not config).
+//
+// Source records carrying names ending in `.source` are skipped — those
+// are the un-expanded source graphs the adapter writes alongside compiled
+// graphs. Same exclusion the filesystem `listGraphs` enforces.
+// ---------------------------------------------------------------------------
+
+const SOURCE_GRAPH_SUFFIX = ".source"
+
+/**
+ * Load a graph definition by ID from any source. Source records are raw
+ * JSON text; this parses them into `GraphDef`. Returns undefined when the
+ * source has no record by that ID.
+ *
+ * Throws on JSON parse error — a malformed graph is a real bug, not a
+ * "not found" case.
+ */
+export async function loadGraphFromSource(
+  graphId: string,
+  source: Source,
+): Promise<GraphDef | undefined> {
+  const record = await source.read(graphId)
+  if (record === undefined) return undefined
+  return JSON.parse(record.text) as GraphDef
+}
+
+/**
+ * List all compiled graph definitions exposed by a source. Skips records
+ * whose names end in `.source` (those are un-expanded source graphs that
+ * pair with compiled graphs in the adapter's filesystem layout). Throws
+ * on JSON parse error.
+ */
+export async function listGraphsFromSource(
+  source: Source,
+): Promise<GraphDef[]> {
+  const names = await source.list()
+  const graphs: GraphDef[] = []
+
+  for (const name of names) {
+    if (name.endsWith(SOURCE_GRAPH_SUFFIX)) continue
+    const record = await source.read(name)
+    if (record === undefined) continue
+    graphs.push(JSON.parse(record.text) as GraphDef)
+  }
+
+  return graphs
 }

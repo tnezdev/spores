@@ -1,15 +1,9 @@
-import { readdir, readFile } from "node:fs/promises"
-import { join } from "node:path"
 import { homedir } from "node:os"
+import { join } from "node:path"
 import type { Skill, SkillRef } from "../types.js"
-
-interface NodeError extends Error {
-  code?: string | undefined
-}
-
-function isNodeError(err: unknown): err is NodeError {
-  return err instanceof Error
-}
+import type { Source } from "../sources/source.js"
+import { LayeredSource } from "../sources/layered.js"
+import { NestedFileSource } from "../sources/nested-file.js"
 
 // ---------------------------------------------------------------------------
 // Frontmatter parser
@@ -67,55 +61,86 @@ function parseFrontmatter(text: string): { meta: Frontmatter; body: string } {
   return { meta, body }
 }
 
-// ---------------------------------------------------------------------------
-// Directory scanning
-// ---------------------------------------------------------------------------
-
-async function scanSkillsDir(dir: string): Promise<SkillRef[]> {
-  let entries: string[]
-  try {
-    entries = await readdir(dir)
-  } catch (err) {
-    if (isNodeError(err) && err.code === "ENOENT") return []
-    throw err
+function metaToRef(meta: Frontmatter, locator: string): SkillRef | undefined {
+  if (meta.name === undefined || meta.description === undefined) return undefined
+  return {
+    name: meta.name,
+    description: meta.description,
+    tags: meta.tags ?? [],
+    path: locator,
   }
-
-  const refs: SkillRef[] = []
-
-  for (const entry of entries) {
-    const skillFile = join(dir, entry, "skill.md")
-    let text: string
-    try {
-      text = await readFile(skillFile, "utf-8")
-    } catch (err) {
-      if (isNodeError(err) && err.code === "ENOENT") continue
-      throw err
-    }
-
-    const { meta } = parseFrontmatter(text)
-    if (meta.name === undefined || meta.description === undefined) continue
-
-    refs.push({
-      name: meta.name,
-      description: meta.description,
-      tags: meta.tags ?? [],
-      path: skillFile,
-    })
-  }
-
-  return refs
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// Source-based API — works with any pluggable Source
 // ---------------------------------------------------------------------------
 
+/**
+ * List all skills exposed by the given source. Skips records whose
+ * frontmatter is missing required fields (`name`, `description`) or
+ * whose entries don't resolve to a readable body — those are surfaced
+ * quietly rather than throwing, matching `loadSkill`'s "return undefined
+ * for malformed" semantics.
+ */
+export async function listSkillsFromSource(
+  source: Source,
+): Promise<SkillRef[]> {
+  const names = await source.list()
+  const refs: SkillRef[] = []
+
+  for (const name of names) {
+    const record = await source.read(name)
+    if (record === undefined) continue
+
+    const { meta } = parseFrontmatter(record.text)
+    const ref = metaToRef(meta, record.locator)
+    if (ref !== undefined) refs.push(ref)
+  }
+
+  return refs.sort((a, b) => a.name.localeCompare(b.name))
+}
+
+/**
+ * Load a single skill by name from a source. Returns undefined if the
+ * name is not found or the frontmatter is missing required fields.
+ */
+export async function loadSkillFromSource(
+  name: string,
+  source: Source,
+): Promise<Skill | undefined> {
+  const record = await source.read(name)
+  if (record === undefined) return undefined
+
+  const { meta, body } = parseFrontmatter(record.text)
+  const ref = metaToRef(meta, record.locator)
+  if (ref === undefined) return undefined
+
+  return { ...ref, content: body }
+}
+
+// ---------------------------------------------------------------------------
+// Convenience API — filesystem layering of project + global skills
+// ---------------------------------------------------------------------------
+
+function userHome(): string {
+  // Prefer HOME env var so tests can override it. Falls back to os.homedir()
+  // which reads the system password database on Unix.
+  return process.env["HOME"] ?? homedir()
+}
+
 function globalSkillsDir(): string {
-  return join(homedir(), ".spores", "skills")
+  return join(userHome(), ".spores", "skills")
 }
 
 function projectSkillsDir(baseDir: string): string {
   return join(baseDir, ".spores", "skills")
+}
+
+function defaultFilesystemSource(baseDir: string): Source {
+  return new LayeredSource([
+    new NestedFileSource(projectSkillsDir(baseDir), "skill.md"),
+    new NestedFileSource(globalSkillsDir(), "skill.md"),
+  ])
 }
 
 /**
@@ -123,19 +148,7 @@ function projectSkillsDir(baseDir: string): string {
  * global skills (`~/.spores/skills/`) when names conflict.
  */
 export async function listSkills(baseDir: string): Promise<SkillRef[]> {
-  const [global, project] = await Promise.all([
-    scanSkillsDir(globalSkillsDir()),
-    scanSkillsDir(projectSkillsDir(baseDir)),
-  ])
-
-  // Merge: project wins on name conflict
-  const byName = new Map<string, SkillRef>()
-  for (const ref of global) byName.set(ref.name, ref)
-  for (const ref of project) byName.set(ref.name, ref)
-
-  return Array.from(byName.values()).sort((a, b) =>
-    a.name.localeCompare(b.name),
-  )
+  return listSkillsFromSource(defaultFilesystemSource(baseDir))
 }
 
 /**
@@ -146,30 +159,5 @@ export async function loadSkill(
   name: string,
   baseDir: string,
 ): Promise<Skill | undefined> {
-  // Check project first, then global
-  const dirs = [projectSkillsDir(baseDir), globalSkillsDir()]
-
-  for (const dir of dirs) {
-    const skillFile = join(dir, name, "skill.md")
-    let text: string
-    try {
-      text = await readFile(skillFile, "utf-8")
-    } catch (err) {
-      if (isNodeError(err) && err.code === "ENOENT") continue
-      throw err
-    }
-
-    const { meta, body } = parseFrontmatter(text)
-    if (meta.name === undefined || meta.description === undefined) continue
-
-    return {
-      name: meta.name,
-      description: meta.description,
-      tags: meta.tags ?? [],
-      path: skillFile,
-      content: body,
-    }
-  }
-
-  return undefined
+  return loadSkillFromSource(name, defaultFilesystemSource(baseDir))
 }

@@ -42,7 +42,11 @@ export type { MemoryAdapter, AdapterCapabilities } from "./memory/adapter.js"
 export { FilesystemAdapter } from "./memory/filesystem.js"
 
 export type { WorkflowAdapter } from "./workflow/adapter.js"
-export { FilesystemWorkflowAdapter } from "./workflow/filesystem.js"
+export {
+  FilesystemWorkflowAdapter,
+  listGraphsFromSource,
+  loadGraphFromSource,
+} from "./workflow/filesystem.js"
 export { Runtime } from "./workflow/runtime.js"
 export {
   expandGraph,
@@ -52,7 +56,12 @@ export {
 
 export { loadConfig } from "./config.js"
 
-export { listSkills, loadSkill } from "./skills/filesystem.js"
+export {
+  listSkills,
+  listSkillsFromSource,
+  loadSkill,
+  loadSkillFromSource,
+} from "./skills/filesystem.js"
 
 export type { TaskAdapter } from "./tasks/adapter.js"
 export { FilesystemTaskAdapter } from "./tasks/filesystem.js"
@@ -71,6 +80,7 @@ export { resolveSituational } from "./personas/situational.js"
 export type { Source, SourceRecord } from "./sources/source.js"
 export { InMemorySource } from "./sources/in-memory.js"
 export { FlatFileSource } from "./sources/flat-file.js"
+export { NestedFileSource } from "./sources/nested-file.js"
 export { LayeredSource } from "./sources/layered.js"
 
 export { match as matchDispatch } from "./dispatch/match.js"
