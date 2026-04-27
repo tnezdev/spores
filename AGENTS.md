@@ -8,13 +8,15 @@ This repo dogfoods its own toolbelt. Before touching code, run the three-command
 
 ## What is SPORES?
 
-A TypeScript library + CLI for agent in-loop primitives. Four things, focused by a fifth:
+A TypeScript library + CLI for agent in-loop primitives:
 
 1. **Memory** — remember/recall/dream with L1/L2/L3 tiers
 2. **Skills** — load and run skill.md files from `.spores/skills/`
 3. **Workflow** — digraph runtime (GraphDef → Run → Transitions, state derived from history)
 4. **Tasks** — typed adapter interface (ULID IDs, Taskwarrior-shaped)
-5. **Persona** — activate a hat at the start of a turn: metadata (memory_tags, skills, task_filter, workflow) + a rendered body with live situational facts. Declarative attention, not enforced scope.
+5. **Persona** — activate a hat at the start of a turn: metadata (memory_tags, skills, task_filter, workflow, routing hints) + a rendered body with live situational facts. Declarative attention, not enforced scope.
+6. **Source** — pluggable read-only loader abstraction (`read(name) → text`, `list() → names`). Personas/skills/workflows all load through the same shape. `LayeredSource` composes for seed-then-emerge (e.g. live DB shadows seed filesystem). See "Source abstraction" below.
+7. **Dispatch** — foundation types for the universal inbound message primitive (`Dispatch`, `DispatchFilter`, `matchDispatch`). Spores ships the message shape and pure match logic; runtimes ship transport, scheduling, and handler execution.
 
 MVP scope = what an agent reaches for *inside a single turn*. No hosting, no webhooks, no session layer — those are daemon-level concerns. **Identity lives outside spores** — in the run orchestration layer. Spores provides the hat; the caller provides who's wearing it.
 
@@ -40,7 +42,7 @@ All shared types live in `src/types.ts`. Add types there before writing implemen
 
 ### Adapter pattern
 
-Every primitive has an interface in `src/<module>/adapter.ts`. Filesystem implementations are the default (and currently only) adapters. Future storage backends implement the same interface.
+Every primitive has an interface in `src/<module>/adapter.ts`. Filesystem implementations are the default. Future storage backends implement the same interface.
 
 | Module | Interface | Implementation |
 |--------|-----------|----------------|
@@ -48,6 +50,28 @@ Every primitive has an interface in `src/<module>/adapter.ts`. Filesystem implem
 | workflow | `WorkflowAdapter` | `src/workflow/filesystem.ts` |
 | tasks | `TaskAdapter` | `src/tasks/adapter.ts` (stub only) |
 | personas | `PersonaAdapter` | `src/personas/filesystem.ts` |
+
+### Source abstraction
+
+Config-style primitives (personas, skills, workflows, file-style dispatch configs) load through a pluggable `Source` interface in `src/sources/`:
+
+```typescript
+interface Source {
+  read(name: string): Promise<SourceRecord | undefined>  // text + locator
+  list(): Promise<string[]>
+}
+```
+
+Reference implementations:
+
+- `FlatFileSource(dir, ext)` — `<dir>/<name><ext>` layouts (personas, workflows)
+- `NestedFileSource(dir, filename)` — `<dir>/<name>/<filename>` layouts (skills)
+- `InMemorySource(records, tag)` — for tests and bake-in seed templates
+- `LayeredSource([liveSource, seedSource])` — first-wins read, union-dedupe list (the seed-then-emerge primitive)
+
+Per-primitive load functions (`loadPersonaFromSource`, `loadSkillFromSource`, `loadGraphFromSource`) accept any `Source` — Compass and other remote runtimes plug in their own (DB, HTTP) without touching spores.
+
+Data primitives (Memory, Artifacts, Tasks) have query semantics and live behind their own adapter shapes — `Source` is for config, not data.
 
 ### CLI: two-word dispatch
 
@@ -99,6 +123,14 @@ Flat-file layout (unlike skills which use a directory per skill). Frontmatter: `
 - `expandGraph` flattens nested subgraphs at register time — nesting is free
 - `Runtime` is a **state machine only** — it derives current state from `Run.history` (no `current_node` field). It does NOT schedule or evaluate `EvaluatorRef` conditions — that's the caller's job.
 - State is immutable: each transition appends to `history`
+
+### Dispatch
+
+Foundation only — the message shape and pure match logic. `Dispatch` carries `from`, `to`, `payload`, `timestamp`, plus optional `when` / `recurrence` delivery metadata. `DispatchFilter` is a declarative predicate over `from` / `to`; `matchDispatch(dispatch, filter)` returns boolean. `DispatchHandlerHooks` types `onRegister` / `onUnregister` for handler-level lifecycle setup (idempotency lives in the hook, not in spores).
+
+Runtimes own send/handle/cancel verbs, the actual transport, scheduling, and handler execution. The split — vocabulary in spores, execution in runtime — keeps spores callable from both long-running daemons and serverless deployments.
+
+See `PROJECTS/spores/DESIGN-runtime-description.md` for the full design conversation.
 
 ### SporesUri
 

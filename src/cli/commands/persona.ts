@@ -49,6 +49,8 @@ export const personaActivateCommand: Command = async (ctx, args, _flags) => {
       SPORES_PERSONA_MEMORY_TAGS: persona.memory_tags.join(","),
       SPORES_PERSONA_SKILLS: persona.skills.join(","),
       SPORES_PERSONA_WORKFLOW: persona.workflow ?? "",
+      SPORES_PERSONA_EFFORT: persona.effort ?? "",
+      SPORES_PERSONA_REASONING: persona.reasoning ?? "",
     },
     ctx.baseDir,
   )

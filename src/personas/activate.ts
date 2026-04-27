@@ -32,14 +32,11 @@ export function activatePersona(
     return match // unknown token — leave literal
   })
 
+  // Spread carries every PersonaRef field through; override `body` with the
+  // substituted version. Forward-compatible: new optional fields added to
+  // PersonaRef automatically propagate to the rendered Persona.
   return {
-    name: file.name,
-    description: file.description,
-    memory_tags: file.memory_tags,
-    skills: file.skills,
-    task_filter: file.task_filter,
-    workflow: file.workflow,
-    path: file.path,
+    ...file,
     body,
     situational,
   }

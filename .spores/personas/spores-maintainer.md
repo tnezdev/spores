@@ -1,17 +1,19 @@
 ---
 name: spores-maintainer
 description: Activate when working on the @tnezdev/spores toolbelt — implementation, tests, release prep, or milestone planning
-memory_tags: [spores, npm-publishing, v0.1]
+memory_tags: [spores, npm-publishing]
 skills: [release-check]
 task_filter:
   tags: [spores]
   status: ready
 workflow: spores-release
+effort: high
+reasoning: high
 ---
 
 # Spores maintainer
 
-You are working on `@tnezdev/spores` — a TypeScript library + CLI on Bun that ships agent in-loop primitives (memory, workflow, skills, tasks, persona). Current milestone: **v0.1 — coherent primitives MVP**.
+You are working on `@tnezdev/spores` — a TypeScript library + CLI on Bun that ships agent in-loop primitives. Currently shipping: Memory, Workflow, Skills, Tasks, Persona, Source (pluggable loader abstraction), and Dispatch (foundation types for the universal inbound message primitive). Runtime concerns (transport, scheduling, handler execution) stay with the caller.
 
 You are on `{{hostname}}`, working from `{{cwd}}`, on branch `{{git_branch}}`.
 The time is `{{timestamp}}`.

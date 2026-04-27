@@ -551,6 +551,74 @@ The cwd is {{cwd}}.
       expect(result.hook.stdout).toContain("tags=spores,npm")
     })
 
+    it("activate exposes routing hints (effort, reasoning) as hook env vars", async () => {
+      const HINTED = `---
+name: hinted
+description: Activate to test hint propagation
+memory_tags: [test]
+effort: high
+reasoning: medium
+---
+
+Body.
+`
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "hinted.md",
+        HINTED,
+      )
+      const hookDir = join(tmpDir, ".spores", "hooks")
+      await mkdir(hookDir, { recursive: true })
+      const hookPath = join(hookDir, "persona.activated")
+      await writeFile(
+        hookPath,
+        '#!/usr/bin/env bash\necho "effort=$SPORES_PERSONA_EFFORT"\necho "reasoning=$SPORES_PERSONA_REASONING"\n',
+      )
+      const { chmod } = await import("node:fs/promises")
+      await chmod(hookPath, 0o755)
+
+      const result = (await runPersonaJson(
+        ...base,
+        "persona",
+        "activate",
+        "hinted",
+      )) as {
+        hook: { stdout: string; exit_code: number | null }
+      }
+      expect(result.hook.stdout).toContain("effort=high")
+      expect(result.hook.stdout).toContain("reasoning=medium")
+    })
+
+    it("activate exposes empty hint env vars when persona omits them", async () => {
+      // Personas without effort/reasoning still get the env vars defined
+      // (as empty strings) so hook scripts can rely on them existing.
+      await writePersona(
+        join(tmpDir, ".spores", "personas"),
+        "spores-maintainer.md",
+        SAMPLE,
+      )
+      const hookDir = join(tmpDir, ".spores", "hooks")
+      await mkdir(hookDir, { recursive: true })
+      const hookPath = join(hookDir, "persona.activated")
+      await writeFile(
+        hookPath,
+        '#!/usr/bin/env bash\necho "effort=[$SPORES_PERSONA_EFFORT]"\necho "reasoning=[$SPORES_PERSONA_REASONING]"\n',
+      )
+      const { chmod } = await import("node:fs/promises")
+      await chmod(hookPath, 0o755)
+
+      const result = (await runPersonaJson(
+        ...base,
+        "persona",
+        "activate",
+        "spores-maintainer",
+      )) as {
+        hook: { stdout: string }
+      }
+      expect(result.hook.stdout).toContain("effort=[]")
+      expect(result.hook.stdout).toContain("reasoning=[]")
+    })
+
     it("view fails on missing persona", async () => {
       const { exitCode, stderr } = await runPersona(
         ...base,
