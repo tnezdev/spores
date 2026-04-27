@@ -34,7 +34,7 @@ INSTALLED=$(cd "$CONSUMER" && bun -e "const p = require('./node_modules/@tnezdev
 echo "    Installed version: ${INSTALLED}"
 
 echo "==> Running consumer script under Bun..."
-bun run "$REPO_ROOT/scripts/smoke-consumer.ts" "$CONSUMER"
+bun run "$REPO_ROOT/scripts/smoke-consumer.mjs" "$CONSUMER"
 
 echo ""
 echo "==> Post-publish check passed (${PKG})."
