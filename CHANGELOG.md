@@ -2,6 +2,44 @@
 
 All notable changes to `@tnezdev/spores`. Format follows [Keep a Changelog](https://keepachangelog.com/). Versioning follows [semver](https://semver.org/).
 
+## 0.4.0 — 2026-04-27
+
+The boundary-work release. Compass and other remote runtimes can now load every config-style primitive from any storage backend, and Dispatch foundation types pin the universal inbound message shape. All additions are backward-compatible.
+
+### Added
+
+- **`Source` abstraction** for pluggable, read-only loading of config primitives. Interface: `read(name) → SourceRecord | undefined` + `list() → string[]`. Reference implementations:
+  - `FlatFileSource(dir, ext)` — `<dir>/<name><ext>` layouts (personas, workflow graphs)
+  - `NestedFileSource(dir, filename)` — `<dir>/<name>/<filename>` layouts (skills)
+  - `InMemorySource(records, tag)` — for tests and bake-in seed templates
+  - `LayeredSource([liveSource, seedSource])` — first-wins read, union-dedupe list (the seed-then-emerge primitive)
+- **Source-based loaders** for every file-style primitive:
+  - `loadPersonaFromSource` / `listPersonasFromSource`
+  - `loadSkillFromSource` / `listSkillsFromSource`
+  - `loadGraphFromSource` / `listGraphsFromSource`
+  - Existing convenience APIs (`loadPersona(name, baseDir)`, `loadSkill`, `FilesystemWorkflowAdapter`) unchanged — they delegate through the new abstraction.
+- **Routing-hint frontmatter on personas.** Two optional fields, each `"low" | "medium" | "high"`:
+  - `effort` — hint for compute/cost tier
+  - `reasoning` — hint for thinking-depth tier
+  - Personas express what they want; the routing layer (caller) decides which model. Personas never name models directly — capability-shaping fields belong outside the editable surface.
+  - Surfaced as `SPORES_PERSONA_EFFORT` / `SPORES_PERSONA_REASONING` env vars on the `persona.activated` hook.
+- **Dispatch foundation** — types and pure match logic for the universal inbound message primitive:
+  - `Dispatch`, `DispatchFilter`, `DispatchHandlerHooks`, `DispatchId` types
+  - `matchDispatch(dispatch, filter)` — pure predicate function over `from` / `to`
+  - Filter semantics: undefined = no constraint; string = exact match; array = one-of; empty filter `{}` matches all.
+  - Spores ships the message shape and pure match logic; runtimes ship transport, scheduling, and handler execution.
+
+### Changed
+
+- `activatePersona()` now spreads `...file` to render the rendered persona — forward-compatible for any future `PersonaRef` field. (Fixes a gap in 0.3.x where new optional fields didn't reach the rendered `Persona`.)
+- Skills filesystem loader gains HOME-aware global dir resolution to match personas. Unblocks project-vs-global override tests that were previously untestable.
+
+### Notes
+
+- Dispatch foundation is intentionally minimal. The full primitive (send/handle/cancel verbs, ID generation, registry helpers, file-config loader for declared recurring sends) lands when concrete consumer friction informs the shape.
+- Data-store primitives (Memory, Tasks, future Artifacts) remain on their own adapter shapes — `Source` is for config, not data.
+- Design context for the loader and Dispatch shapes lives in `PROJECTS/spores/DESIGN-runtime-description.md` (W18 + W18-later overlays).
+
 ## 0.2.0 — 2026-04-10
 
 ### Added
