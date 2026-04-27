@@ -31,13 +31,19 @@ jobs:
       - name: Test
         run: bun test
 
-      - name: Smoke test (consumer install from tarball)
-        run: bash scripts/smoke-test.sh
+      - name: Build (tsc → dist/)
+        run: bun run build
 
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           registry-url: "https://registry.npmjs.org"
+
+      - name: Smoke test (Bun consumer install from tarball)
+        run: bash scripts/smoke-test.sh
+
+      - name: Smoke test (Node consumer install from tarball)
+        run: bash scripts/smoke-test-node.sh
 
       # Trusted publishing requires npm >= 11.5.1.
       # Bootstrap npm 11 via direct tarball download — avoids using the

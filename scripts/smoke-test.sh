@@ -15,8 +15,8 @@ REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 TMPDIR_BASE="$(mktemp -d)"
 trap 'rm -rf "$TMPDIR_BASE"' EXIT
 
-echo "==> Packing tarball..."
-TARBALL=$(cd "$REPO_ROOT" && npm pack --pack-destination "$TMPDIR_BASE" 2>/dev/null)
+echo "==> Packing tarball (runs prepack → bun run build)..."
+TARBALL=$(cd "$REPO_ROOT" && npm pack --silent --pack-destination "$TMPDIR_BASE" 2>/dev/null)
 TARBALL_PATH="$TMPDIR_BASE/$TARBALL"
 
 if [ ! -f "$TARBALL_PATH" ]; then
@@ -36,7 +36,7 @@ echo "==> Installing from tarball..."
 (cd "$CONSUMER" && bun add "$TARBALL_PATH" 2>&1)
 
 echo "==> Running consumer script under Bun..."
-bun run "$REPO_ROOT/scripts/smoke-consumer.ts" "$CONSUMER"
+bun run "$REPO_ROOT/scripts/smoke-consumer.mjs" "$CONSUMER"
 
 echo ""
 echo "==> Smoke test passed."

@@ -24,3 +24,16 @@ jobs:
 
       - name: Test
         run: bun test
+
+      - name: Build (tsc → dist/)
+        run: bun run build
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Smoke test (Bun consumer install from tarball)
+        run: bash scripts/smoke-test.sh
+
+      - name: Smoke test (Node consumer install from tarball)
+        run: bash scripts/smoke-test-node.sh
