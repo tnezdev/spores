@@ -3,6 +3,7 @@ import type { Command, Ctx } from "../context.js"
 import { output } from "../output.js"
 import { FilesystemWorkflowAdapter } from "../../workflow/filesystem.js"
 import { Runtime } from "../../workflow/runtime.js"
+import { parseGraph } from "../../workflow/parse.js"
 import { fireHook } from "../../hooks/fire.js"
 import type {
   GraphDef,
@@ -124,13 +125,22 @@ async function maybeFireTerminated(
 
 export const workflowCreateCommand: Command = async (ctx, args) => {
   const file = args[0]
-  if (!file) throw new Error("Usage: spores workflow create <file.json>")
+  if (!file)
+    throw new Error("Usage: spores workflow create <file.json|file.yaml>")
 
   const data = await readFile(file, "utf-8")
-  const graph = JSON.parse(data) as GraphDef
+  const graph = parseGraph(data, file)
 
-  if (!graph.id || !graph.name || !graph.version || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges)) {
-    throw new Error("Invalid graph: must have id, name, version, nodes[], and edges[]")
+  if (
+    !graph.id ||
+    !graph.name ||
+    !graph.version ||
+    !Array.isArray(graph.nodes) ||
+    !Array.isArray(graph.edges)
+  ) {
+    throw new Error(
+      "Invalid graph: must have id, name, version, nodes[], and edges[]",
+    )
   }
 
   const rt = makeRuntime(ctx)

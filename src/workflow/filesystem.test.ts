@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from "node:fs/promises"
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
@@ -247,5 +247,108 @@ describe("listGraphsFromSource", () => {
   it("returns empty array from empty source", async () => {
     const graphs = await listGraphsFromSource(new InMemorySource({}))
     expect(graphs).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// YAML graph support
+// ---------------------------------------------------------------------------
+
+const YAML_GRAPH = `
+id: yaml-graph
+name: YAML Graph
+version: "1.0.0"
+nodes:
+  - id: a
+    label: Node A
+    artifact_type: doc
+  - id: b
+    label: Node B
+    artifact_type: code
+edges:
+  - from: a
+    to: b
+    condition: always
+`.trim()
+
+describe("FilesystemWorkflowAdapter — YAML graphs", () => {
+  let tmpDir: string
+  let store: FilesystemWorkflowAdapter
+
+  beforeEach(async () => {
+    tmpDir = await mkdtemp(join(tmpdir(), "spores-wf-yaml-test-"))
+    store = new FilesystemWorkflowAdapter(tmpDir)
+  })
+
+  afterEach(async () => {
+    await rm(tmpDir, { recursive: true, force: true })
+  })
+
+  it("loadGraph reads a .yaml file placed directly in the graphs dir", async () => {
+    const graphsDir = join(tmpDir, ".spores", "workflows")
+    await mkdir(graphsDir, { recursive: true })
+    await writeFile(join(graphsDir, "yaml-graph.yaml"), YAML_GRAPH, "utf-8")
+
+    const loaded = await store.loadGraph("yaml-graph")
+    expect(loaded).toBeDefined()
+    expect(loaded!.id).toBe("yaml-graph")
+    expect(loaded!.name).toBe("YAML Graph")
+    expect(loaded!.nodes).toHaveLength(2)
+    expect(loaded!.edges).toHaveLength(1)
+    expect(loaded!.edges[0]!.condition).toBe("always")
+  })
+
+  it("loadGraph reads a .yml file", async () => {
+    const graphsDir = join(tmpDir, ".spores", "workflows")
+    await mkdir(graphsDir, { recursive: true })
+    await writeFile(join(graphsDir, "yaml-graph.yml"), YAML_GRAPH, "utf-8")
+
+    const loaded = await store.loadGraph("yaml-graph")
+    expect(loaded).toBeDefined()
+    expect(loaded!.id).toBe("yaml-graph")
+  })
+
+  it("loadGraph prefers .json over .yaml when both exist", async () => {
+    const graphsDir = join(tmpDir, ".spores", "workflows")
+    await mkdir(graphsDir, { recursive: true })
+    const jsonGraph = makeGraph("yaml-graph")
+    jsonGraph.name = "JSON version"
+    await writeFile(
+      join(graphsDir, "yaml-graph.json"),
+      JSON.stringify(jsonGraph),
+      "utf-8",
+    )
+    await writeFile(join(graphsDir, "yaml-graph.yaml"), YAML_GRAPH, "utf-8")
+
+    const loaded = await store.loadGraph("yaml-graph")
+    expect(loaded!.name).toBe("JSON version")
+  })
+
+  it("listGraphs includes YAML graphs", async () => {
+    const graph = makeGraph("json-graph")
+    await store.saveGraph(graph)
+
+    const graphsDir = join(tmpDir, ".spores", "workflows")
+    await writeFile(join(graphsDir, "yaml-graph.yaml"), YAML_GRAPH, "utf-8")
+
+    const graphs = await store.listGraphs()
+    expect(graphs).toHaveLength(2)
+    const ids = graphs.map((g) => g.id).sort()
+    expect(ids).toEqual(["json-graph", "yaml-graph"])
+  })
+
+  it("listGraphs excludes .source.yaml files", async () => {
+    const graphsDir = join(tmpDir, ".spores", "workflows")
+    await mkdir(graphsDir, { recursive: true })
+    await writeFile(join(graphsDir, "yaml-graph.yaml"), YAML_GRAPH, "utf-8")
+    await writeFile(
+      join(graphsDir, "yaml-graph.source.yaml"),
+      YAML_GRAPH,
+      "utf-8",
+    )
+
+    const graphs = await store.listGraphs()
+    expect(graphs).toHaveLength(1)
+    expect(graphs[0]!.id).toBe("yaml-graph")
   })
 })

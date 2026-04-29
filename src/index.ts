@@ -53,6 +53,7 @@ export {
   findEntryNodes,
   findTerminalNodes,
 } from "./workflow/expand.js"
+export { parseGraph } from "./workflow/parse.js"
 
 export { loadConfig } from "./config.js"
 
