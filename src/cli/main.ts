@@ -45,6 +45,15 @@ import {
   personaActivateCommand,
 } from "./commands/persona.js"
 import { wakeCommand } from "./commands/wake.js"
+import {
+  artifactCreateCommand,
+  artifactReadCommand,
+  artifactWriteCommand,
+  artifactEditCommand,
+  artifactInspectCommand,
+  artifactListCommand,
+  artifactLockCommand,
+} from "./commands/artifact.js"
 
 type Parsed = {
   positional: string[]
@@ -112,6 +121,13 @@ const commands: Record<string, Command> = {
   "persona list": personaListCommand,
   "persona view": personaViewCommand,
   "persona activate": personaActivateCommand,
+  "artifact create": artifactCreateCommand,
+  "artifact read": artifactReadCommand,
+  "artifact write": artifactWriteCommand,
+  "artifact edit": artifactEditCommand,
+  "artifact inspect": artifactInspectCommand,
+  "artifact list": artifactListCommand,
+  "artifact lock": artifactLockCommand,
   wake: wakeCommand,
 }
 
@@ -152,6 +168,14 @@ Commands:
   persona list                        List available personas
   persona view <name>                 Show raw persona (no substitution)
   persona activate <name>             Render persona with live facts (pipe to LLM)
+
+  artifact create <type>              Create a new artifact
+  artifact read <id>                  Read artifact body (pipe-friendly)
+  artifact write <id>                 Write new body to an artifact
+  artifact edit <id>                  Edit artifact body (--old / --new)
+  artifact inspect <id>               Show artifact metadata
+  artifact list                       List artifacts (filter with flags)
+  artifact lock <id>                  Lock an artifact (append-only)
 
   wake                                Session bootstrap — identity, environment, personas
 

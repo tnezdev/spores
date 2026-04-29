@@ -27,6 +27,14 @@ import type {
   PersonaFile,
   PersonaRef,
   WakeOutput,
+  ArtifactRecord,
+  ArtifactMetadata,
+  ArtifactRef,
+  ArtifactCreatedOutput,
+  ArtifactWrittenOutput,
+  ArtifactEditedOutput,
+  ArtifactLockedOutput,
+  ArtifactInspectedOutput,
 } from "../types.js"
 
 
@@ -423,4 +431,102 @@ export function formatWake(result: WakeOutput): string {
     parts.push(hook.stdout.trimEnd())
   }
   return parts.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Artifact formatters
+// ---------------------------------------------------------------------------
+
+export function formatArtifactRecord(r: ArtifactRecord): string {
+  const tags = r.tags.length > 0 ? ` [${r.tags.join(", ")}]` : ""
+  const locked = r.locked ? " (locked)" : ""
+  const derived = r.derived_from !== undefined ? `\n  derived_from: ${r.derived_from}` : ""
+  return [
+    `${r.id}${locked}`,
+    `  type:    ${r.type}`,
+    `  title:   ${r.title}${tags}`,
+    `  version: ${r.version}`,
+    `  updated: ${r.updated_at}${derived}`,
+  ].join("\n")
+}
+
+export function formatArtifactMetadata(m: ArtifactMetadata): string {
+  const tags = m.tags.length > 0 ? ` [${m.tags.join(", ")}]` : ""
+  const locked = m.locked ? " (locked)" : ""
+  const size =
+    m.size_bytes !== undefined ? `\n  size:    ${m.size_bytes} bytes` : ""
+  const derived = m.derived_from !== undefined ? `\n  derived_from: ${m.derived_from}` : ""
+  return [
+    `${m.id}${locked}`,
+    `  type:     ${m.type}`,
+    `  title:    ${m.title}${tags}`,
+    `  version:  ${m.version}`,
+    `  body_ref: ${m.body_ref}`,
+    `  created:  ${m.created_at}`,
+    `  updated:  ${m.updated_at}${size}${derived}`,
+  ].join("\n")
+}
+
+/** Human formatter for `artifact create`. */
+export function formatArtifactCreated(result: ArtifactCreatedOutput): string {
+  const parts = [`Artifact created:\n${formatArtifactRecord(result.artifact)}`]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `artifact write`. */
+export function formatArtifactWritten(result: ArtifactWrittenOutput): string {
+  const parts = [`Artifact written:\n${formatArtifactRecord(result.artifact)}`]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `artifact edit`. */
+export function formatArtifactEdited(result: ArtifactEditedOutput): string {
+  const parts = [`Artifact edited:\n${formatArtifactRecord(result.artifact)}`]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `artifact lock`. */
+export function formatArtifactLocked(result: ArtifactLockedOutput): string {
+  const parts = [`Artifact locked:\n${formatArtifactRecord(result.artifact)}`]
+  const hook = result.hook
+  if (hook !== undefined && hook.ran && hook.stdout.trim().length > 0) {
+    parts.push("\n---\n")
+    parts.push(hook.stdout.trimEnd())
+  }
+  return parts.join("\n")
+}
+
+/** Human formatter for `artifact inspect`. */
+export function formatArtifactInspected(result: ArtifactInspectedOutput): string {
+  return formatArtifactMetadata(result.artifact)
+}
+
+/** Human formatter for `artifact list`. */
+export function formatArtifactList(refs: ArtifactRef[]): string {
+  if (refs.length === 0) return "No artifacts found."
+  return table(
+    ["ID", "TYPE", "TITLE", "VER", "LOCKED"],
+    refs.map((r) => [
+      r.id,
+      r.type,
+      r.title,
+      String(r.version),
+      r.locked ? "yes" : "no",
+    ]),
+  )
 }

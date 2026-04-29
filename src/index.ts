@@ -6,6 +6,7 @@ export type {
   DreamResult,
   SporesConfig,
   NodeType,
+  NodeArtifactDef,
   NodeDef,
   EdgeDef,
   EvaluatorRef,
@@ -36,6 +37,17 @@ export type {
   WorkflowRunTerminatedOutput,
   WorkflowRunTransitionedOutput,
   WakeOutput,
+  ArtifactId,
+  ArtifactRecord,
+  ArtifactMetadata,
+  ArtifactRef,
+  ArtifactQuery,
+  ArtifactWriteMode,
+  ArtifactCreatedOutput,
+  ArtifactWrittenOutput,
+  ArtifactEditedOutput,
+  ArtifactLockedOutput,
+  ArtifactInspectedOutput,
 } from "./types.js"
 
 export type { MemoryAdapter, AdapterCapabilities } from "./memory/adapter.js"
@@ -89,3 +101,6 @@ export { KvSource } from "./sources/kv.js"
 export { match as matchDispatch } from "./dispatch/match.js"
 
 export { fireHook } from "./hooks/fire.js"
+
+export type { ArtifactAdapter, CreateArtifactInput, WriteArtifactInput } from "./artifact/adapter.js"
+export { FilesystemArtifactAdapter } from "./artifact/filesystem.js"
