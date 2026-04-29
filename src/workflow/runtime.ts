@@ -1,6 +1,7 @@
 import { expandGraph } from "./expand.js"
 import type {
   GraphDef,
+  NodeDef,
   NodeState,
   NodeStatus,
   Run,
@@ -143,6 +144,9 @@ export class Runtime {
     }
 
     if (options?.artifact) {
+      if (toStatus === "completed") {
+        this.validateArtifactType(nodeDef, options.artifact.type)
+      }
       t.artifact = { ...options.artifact, produced_at: now }
     }
     if (options?.reason !== undefined) {
@@ -183,6 +187,17 @@ export class Runtime {
     if (!allowed || !allowed.includes(to)) {
       throw new Error(
         `Illegal transition for node '${nodeId}': ${from} → ${to}`,
+      )
+    }
+  }
+
+  private validateArtifactType(node: NodeDef, artifactType: string): void {
+    // Resolve the expected type: structured contract wins over legacy shorthand.
+    const expected = node.artifact?.type ?? node.artifact_type
+    if (expected === undefined) return // no contract declared — accept anything
+    if (artifactType !== expected) {
+      throw new Error(
+        `Artifact type mismatch for node '${node.id}': expected '${expected}', got '${artifactType}'`,
       )
     }
   }
