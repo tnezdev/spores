@@ -50,11 +50,33 @@ export type SporesConfig = {
 
 export type NodeType = "automated" | "manual"
 
+/**
+ * Structured artifact contract for a workflow node. Declares the expected
+ * output shape so runtimes can validate, route, and index artifacts without
+ * relying on prose in `description` or `claims`.
+ *
+ * `type` is required — it names the artifact kind (e.g. `"user-identity"`).
+ * All other fields are optional and advisory: `required` gates whether the
+ * runtime enforces presence on completion, `schema` is opaque runtime-owned
+ * validation data (JSON Schema, Zod metadata, etc.), `path` is a logical
+ * routing hint, and `tags` aid indexing.
+ */
+export type NodeArtifactDef = {
+  type: string
+  description?: string
+  required?: boolean
+  path?: string
+  tags?: string[]
+  schema?: unknown
+}
+
 export type NodeDef = {
   id: string
   label: string
   description?: string
-  artifact_type: string
+  /** @deprecated Use `artifact` instead. Kept for backward compatibility. */
+  artifact_type?: string
+  artifact?: NodeArtifactDef
   type?: NodeType
   claims?: string[]
   subgraph?: GraphDef

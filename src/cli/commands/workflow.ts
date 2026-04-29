@@ -161,7 +161,7 @@ export const workflowShowCommand: Command = async (ctx, args) => {
     lines.push("")
     lines.push("Nodes:")
     for (const n of g.nodes) {
-      const tags = [n.artifact_type]
+      const tags = [n.artifact?.type ?? n.artifact_type].filter(Boolean)
       if (n.type === "manual") tags.push("manual")
       lines.push(`  ${n.id} — ${n.label} [${tags.join(", ")}]`)
     }

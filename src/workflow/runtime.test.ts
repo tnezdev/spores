@@ -599,6 +599,204 @@ describe("failure flow", () => {
   })
 })
 
+describe("NodeArtifactDef — structured artifact contract", () => {
+  function artifactContractGraph(): GraphDef {
+    return {
+      id: "artifact-contract",
+      name: "Artifact Contract",
+      version: "1.0",
+      nodes: [
+        {
+          id: "identify",
+          label: "Identify the user",
+          artifact: {
+            type: "user-identity",
+            description: "Confirmed identity context.",
+            required: true,
+            path: "user.identity",
+            tags: ["identity"],
+          },
+        },
+        {
+          id: "summarize",
+          label: "Summarize findings",
+          artifact: { type: "summary" },
+        },
+        {
+          id: "legacy",
+          label: "Legacy node",
+          artifact_type: "report",
+        },
+        {
+          id: "no-contract",
+          label: "No contract declared",
+        },
+      ],
+      edges: [
+        { from: "identify", to: "summarize" },
+        { from: "summarize", to: "legacy" },
+        { from: "legacy", to: "no-contract" },
+      ],
+    }
+  }
+
+  it("accepts artifact matching structured artifact.type", async () => {
+    const g = artifactContractGraph()
+    await rt.registerGraph(g)
+    const run = await rt.createRun(g.id)
+    await rt.transition(g.id, run.run_id, "identify", "in_progress", "agent")
+    const t = await rt.transition(
+      g.id,
+      run.run_id,
+      "identify",
+      "completed",
+      "agent",
+      { artifact: { type: "user-identity", content: { display_name: "Travis" } } },
+    )
+    expect(t.artifact?.type).toBe("user-identity")
+  })
+
+  it("rejects artifact type mismatch against structured artifact.type on completed", async () => {
+    const g = artifactContractGraph()
+    await rt.registerGraph(g)
+    const run = await rt.createRun(g.id)
+    await rt.transition(g.id, run.run_id, "identify", "in_progress", "agent")
+    await expect(
+      rt.transition(g.id, run.run_id, "identify", "completed", "agent", {
+        artifact: { type: "wrong-type", content: {} },
+      }),
+    ).rejects.toThrow(/Artifact type mismatch.*identify.*user-identity.*wrong-type/)
+  })
+
+  it("does not check type when transition is to failed (failure artifacts may differ)", async () => {
+    const g = artifactContractGraph()
+    await rt.registerGraph(g)
+    const run = await rt.createRun(g.id)
+    await rt.transition(g.id, run.run_id, "identify", "in_progress", "agent")
+    // failing with a log artifact — type differs from contract, should not throw
+    const t = await rt.transition(
+      g.id,
+      run.run_id,
+      "identify",
+      "failed",
+      "agent",
+      { artifact: { type: "error-log", content: "unexpected EOF" } },
+    )
+    expect(t.to_status).toBe("failed")
+    expect(t.artifact?.type).toBe("error-log")
+  })
+
+  it("accepts artifact matching legacy artifact_type", async () => {
+    const g = artifactContractGraph()
+    await rt.registerGraph(g)
+    const run = await rt.createRun(g.id)
+    await rt.transition(g.id, run.run_id, "identify", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "identify", "completed", "agent", {
+      artifact: { type: "user-identity", content: {} },
+    })
+    await rt.transition(g.id, run.run_id, "summarize", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "summarize", "completed", "agent", {
+      artifact: { type: "summary", content: "brief summary" },
+    })
+    await rt.transition(g.id, run.run_id, "legacy", "in_progress", "agent")
+    const t = await rt.transition(
+      g.id,
+      run.run_id,
+      "legacy",
+      "completed",
+      "agent",
+      { artifact: { type: "report", content: "report text" } },
+    )
+    expect(t.artifact?.type).toBe("report")
+  })
+
+  it("rejects artifact type mismatch against legacy artifact_type on completed", async () => {
+    const g = artifactContractGraph()
+    await rt.registerGraph(g)
+    const run = await rt.createRun(g.id)
+    await rt.transition(g.id, run.run_id, "identify", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "identify", "completed", "agent", {
+      artifact: { type: "user-identity", content: {} },
+    })
+    await rt.transition(g.id, run.run_id, "summarize", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "summarize", "completed", "agent", {
+      artifact: { type: "summary", content: {} },
+    })
+    await rt.transition(g.id, run.run_id, "legacy", "in_progress", "agent")
+    await expect(
+      rt.transition(g.id, run.run_id, "legacy", "completed", "agent", {
+        artifact: { type: "wrong", content: {} },
+      }),
+    ).rejects.toThrow(/Artifact type mismatch.*legacy.*report.*wrong/)
+  })
+
+  it("accepts any artifact type when node has no contract", async () => {
+    const g = artifactContractGraph()
+    await rt.registerGraph(g)
+    const run = await rt.createRun(g.id)
+    // walk the whole chain to get to no-contract
+    await rt.transition(g.id, run.run_id, "identify", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "identify", "completed", "agent", {
+      artifact: { type: "user-identity", content: {} },
+    })
+    await rt.transition(g.id, run.run_id, "summarize", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "summarize", "completed", "agent", {
+      artifact: { type: "summary", content: {} },
+    })
+    await rt.transition(g.id, run.run_id, "legacy", "in_progress", "agent")
+    await rt.transition(g.id, run.run_id, "legacy", "completed", "agent", {
+      artifact: { type: "report", content: {} },
+    })
+    await rt.transition(g.id, run.run_id, "no-contract", "in_progress", "agent")
+    const t = await rt.transition(
+      g.id,
+      run.run_id,
+      "no-contract",
+      "completed",
+      "agent",
+      { artifact: { type: "anything", content: 42 } },
+    )
+    expect(t.artifact?.type).toBe("anything")
+  })
+
+  it("structured artifact.type takes precedence over legacy artifact_type when both present", async () => {
+    const graph: GraphDef = {
+      id: "both-fields",
+      name: "Both Fields",
+      version: "1.0",
+      nodes: [
+        {
+          id: "node",
+          label: "Node",
+          artifact_type: "legacy-type",
+          artifact: { type: "new-type" },
+        },
+      ],
+      edges: [],
+    }
+    await rt.registerGraph(graph)
+    const run = await rt.createRun(graph.id)
+    await rt.transition(graph.id, run.run_id, "node", "in_progress", "agent")
+    // new-type wins; legacy-type is ignored
+    const t = await rt.transition(
+      graph.id,
+      run.run_id,
+      "node",
+      "completed",
+      "agent",
+      { artifact: { type: "new-type", content: "ok" } },
+    )
+    expect(t.artifact?.type).toBe("new-type")
+    // using legacy-type should fail because new-type wins
+    await rt.transition(graph.id, run.run_id, "node", "in_progress", "agent")
+    await expect(
+      rt.transition(graph.id, run.run_id, "node", "completed", "agent", {
+        artifact: { type: "legacy-type", content: "nope" },
+      }),
+    ).rejects.toThrow(/Artifact type mismatch.*node.*new-type.*legacy-type/)
+  })
+})
+
 describe("run lifecycle", () => {
   it("createRun throws for unknown graph", async () => {
     await expect(rt.createRun("nope")).rejects.toThrow(/Unknown graph/)
@@ -670,10 +868,18 @@ describe("subgraph integration", () => {
     await rt.registerGraph(g)
     const run = await rt.createRun(g.id)
 
+    // Use artifact types that match each node's declared artifact_type.
+    const artifactTypeByNode: Record<string, string> = {
+      A: "doc",
+      "B.X": "finding",
+      "B.Y": "finding",
+      "B.Z": "report",
+      C: "doc",
+    }
     for (const id of ["A", "B.X", "B.Y", "B.Z", "C"]) {
       await rt.transition(g.id, run.run_id, id, "in_progress", "agent")
       await rt.transition(g.id, run.run_id, id, "completed", "agent", {
-        artifact: { type: "doc", content: `${id}-output` },
+        artifact: { type: artifactTypeByNode[id]!, content: `${id}-output` },
       })
     }
 
