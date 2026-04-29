@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+#
+# .spores/hooks/artifact.written
+#
+# Fires after `spores artifact write <id>` or `spores artifact edit <id>`
+# has persisted a new version to disk.
+# Indexes the artifact reference into memory so it can be recalled by type,
+# title, or version via `spores memory recall`.
+#
+# Contract — env vars set by spores:
+#   SPORES_EVENT            = "artifact.written" | "artifact.edited"
+#   SPORES_BIN              = path to the spores CLI entry (for callbacks)
+#   SPORES_ARTIFACT_ID      = the artifact ULID
+#   SPORES_ARTIFACT_VERSION = the new version number (as a string)
+#   SPORES_ARTIFACT_MODE    = write mode: "iterate" | "replace"
+#
+# Stdout from this script is appended to the command output.
+# Non-zero exit is surfaced as a warning — it does not fail the write.
+
+set -euo pipefail
+
+ID="${SPORES_ARTIFACT_ID:-}"
+VERSION="${SPORES_ARTIFACT_VERSION:-}"
+MODE="${SPORES_ARTIFACT_MODE:-}"
+
+# Exit quietly if no artifact info to work with
+[[ -z "$ID" ]] && exit 0
+
+# Build memory content
+CONTENT="Artifact written: ${ID} v${VERSION} (mode: ${MODE})"
+
+# SPORES_BIN may be a path to main.ts (dev) or the installed `spores` binary.
+if [[ "$SPORES_BIN" == *.ts ]]; then
+  invoke() { bun "$SPORES_BIN" "$@"; }
+else
+  invoke() { "$SPORES_BIN" "$@"; }
+fi
+
+# Store with a stable key so iterate writes update rather than duplicate
+invoke memory remember "$CONTENT" \
+  --key "artifact-written:${ID}" \
+  --tags "artifact-written" \
+  --tier L1 || true

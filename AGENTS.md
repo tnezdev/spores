@@ -15,8 +15,9 @@ A TypeScript library + CLI for agent in-loop primitives:
 3. **Workflow** — digraph runtime (GraphDef → Run → Transitions, state derived from history)
 4. **Tasks** — typed adapter interface (ULID IDs, Taskwarrior-shaped)
 5. **Persona** — activate a hat at the start of a turn: metadata (memory_tags, skills, task_filter, workflow, routing hints) + a rendered body with live situational facts. Declarative attention, not enforced scope.
-6. **Source** — pluggable read-only loader abstraction (`read(name) → text`, `list() → names`). Personas/skills/workflows all load through the same shape. `LayeredSource` composes for seed-then-emerge (e.g. live DB shadows seed filesystem). See "Source abstraction" below.
-7. **Dispatch** — foundation types for the universal inbound message primitive (`Dispatch`, `DispatchFilter`, `matchDispatch`). Spores ships the message shape and pure match logic; runtimes ship transport, scheduling, and handler execution.
+6. **Artifact** — versioned content blobs with metadata (type, title, tags, lock). The canonical place to store an agent's durable outputs within a project — briefs, memos, reports, plans. See "Artifact primitive" below.
+7. **Source** — pluggable read-only loader abstraction (`read(name) → text`, `list() → names`). Personas/skills/workflows all load through the same shape. `LayeredSource` composes for seed-then-emerge (e.g. live DB shadows seed filesystem). See "Source abstraction" below.
+8. **Dispatch** — foundation types for the universal inbound message primitive (`Dispatch`, `DispatchFilter`, `matchDispatch`). Spores ships the message shape and pure match logic; runtimes ship transport, scheduling, and handler execution.
 
 MVP scope = what an agent reaches for *inside a single turn*. No hosting, no webhooks, no session layer — those are daemon-level concerns. **Identity lives outside spores** — in the run orchestration layer. Spores provides the hat; the caller provides who's wearing it.
 
@@ -50,6 +51,7 @@ Every primitive has an interface in `src/<module>/adapter.ts`. Filesystem implem
 | workflow | `WorkflowAdapter` | `src/workflow/filesystem.ts` |
 | tasks | `TaskAdapter` | `src/tasks/adapter.ts` (stub only) |
 | personas | `PersonaAdapter` | `src/personas/filesystem.ts` |
+| artifacts | `ArtifactAdapter` | `src/artifact/filesystem.ts` |
 
 ### Source abstraction
 
@@ -87,6 +89,7 @@ Current command surface:
 - `spores skill list/show/run`
 - `spores workflow list/show/run/status`
 - `spores persona list/view/activate`
+- `spores artifact create/read/write/edit/inspect/list/lock`
 
 ### Skills on disk
 
@@ -144,6 +147,67 @@ See `PROJECTS/spores/DESIGN-runtime-description.md` for the full design conversa
 - Error handling: functions throw on unexpected errors; return `undefined` for "not found" cases (e.g. `loadSkill` returns `undefined` when skill doesn't exist)
 - No `console.log` in library code — CLI output goes through `output(ctx, data, formatter)` in `src/cli/main.ts`
 - **Descriptions are agent-facing activation triggers, not labels.** For both skills and personas, phrase `description` as "Activate when..." rather than "The X maintainer". `list` output is meant to function as a lookup table an agent scans to decide what to reach for — good triggers make the scan useful.
+
+### Artifact primitive
+
+Artifacts are versioned markdown blobs — the agent's durable output store for a project.
+
+**On-disk layout** (inside `.spores/artifacts/`):
+
+```
+.spores/artifacts/<ulid>/meta.json    — ArtifactRecord (type, title, version, locked, tags, …)
+.spores/artifacts/<ulid>/v1.md        — body at version 1
+.spores/artifacts/<ulid>/v2.md        — body at version 2 (iterate write)
+```
+
+`body_ref` in `meta.json` is relative to `.spores/artifacts/` — e.g. `"<id>/v2.md"`.
+
+**Write modes:**
+
+| Mode | Behavior |
+|------|----------|
+| `iterate` (default) | Bump version, write `v<n+1>.md`. Prior versions remain on disk. |
+| `replace` | Overwrite current `v<n>.md` in place. Version unchanged. |
+| `create` | Fail with "already exists". Used only for first-write semantics. |
+
+**Lock semantics:** `artifact lock <id>` sets `locked=true` in `meta.json`. Locked artifacts reject `write` and `edit`. `lock` is idempotent — locking an already-locked artifact is a no-op.
+
+**CLI worked example:**
+
+```bash
+# Create
+spores artifact create brief "## Q2 Launch\n\nTBD." --title "Q2 Brief" --tags "q2,launch"
+
+# Read (pipe-friendly — raw body to stdout in human mode, JSON with --json)
+spores artifact read 01JXYZ... | pbcopy
+
+# Iterate
+spores artifact write 01JXYZ... "## Q2 Launch\n\nUpdated content." --mode iterate
+
+# Targeted edit
+spores artifact edit 01JXYZ... --old "TBD." --new "Final copy."
+
+# Inspect metadata
+spores artifact inspect 01JXYZ... --json
+
+# List with filter
+spores artifact list --type brief --json
+
+# Lock the final version
+spores artifact lock 01JXYZ...
+```
+
+**Hook events:**
+
+| Event | Fired by |
+|-------|---------|
+| `artifact.created` | `artifact create` |
+| `artifact.written` | `artifact write`, `artifact edit` |
+| `artifact.locked` | `artifact lock` |
+
+Hook env vars: `SPORES_ARTIFACT_ID`, `SPORES_ARTIFACT_TYPE`, `SPORES_ARTIFACT_TITLE`, `SPORES_ARTIFACT_TAGS` (create); `SPORES_ARTIFACT_ID`, `SPORES_ARTIFACT_VERSION`, `SPORES_ARTIFACT_MODE` (written); `SPORES_ARTIFACT_ID`, `SPORES_ARTIFACT_FINAL_VERSION` (locked).
+
+**Dogfood hook:** `.spores/hooks/artifact.written` — indexes the artifact reference into memory after every write so it's searchable via `spores memory recall`.
 
 ## What NOT to add
 
