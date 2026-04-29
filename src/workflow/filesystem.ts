@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto"
 import type { GraphDef, Run, Transition } from "../types.js"
 import type { Source } from "../sources/source.js"
 import type { WorkflowAdapter } from "./adapter.js"
+import { parseGraph } from "./parse.js"
 
 interface NodeError extends Error {
   code?: string | undefined
@@ -50,38 +51,49 @@ export class FilesystemWorkflowAdapter implements WorkflowAdapter {
   }
 
   async loadSourceGraph(graphId: string): Promise<GraphDef | undefined> {
-    try {
-      const data = await readFile(
-        join(this.graphsDir, `${graphId}.source.json`),
-        "utf-8",
-      )
-      return JSON.parse(data) as GraphDef
-    } catch (err) {
-      if (isNodeError(err) && err.code === "ENOENT") return undefined
-      throw err
+    for (const ext of [".source.json", ".source.yaml", ".source.yml"]) {
+      const filePath = join(this.graphsDir, `${graphId}${ext}`)
+      try {
+        const data = await readFile(filePath, "utf-8")
+        return parseGraph(data, filePath)
+      } catch (err) {
+        if (isNodeError(err) && err.code === "ENOENT") continue
+        throw err
+      }
     }
+    return undefined
   }
 
   async loadGraph(graphId: string): Promise<GraphDef | undefined> {
-    try {
-      const data = await readFile(
-        join(this.graphsDir, `${graphId}.json`),
-        "utf-8",
-      )
-      return JSON.parse(data) as GraphDef
-    } catch (err) {
-      if (isNodeError(err) && err.code === "ENOENT") return undefined
-      throw err
+    for (const ext of [".json", ".yaml", ".yml"]) {
+      const filePath = join(this.graphsDir, `${graphId}${ext}`)
+      try {
+        const data = await readFile(filePath, "utf-8")
+        return parseGraph(data, filePath)
+      } catch (err) {
+        if (isNodeError(err) && err.code === "ENOENT") continue
+        throw err
+      }
     }
+    return undefined
   }
 
   async listGraphs(): Promise<GraphDef[]> {
     const files = await safeReaddir(this.graphsDir)
     const graphs: GraphDef[] = []
     for (const file of files) {
-      if (!file.endsWith(".json") || file.endsWith(".source.json")) continue
-      const data = await readFile(join(this.graphsDir, file), "utf-8")
-      graphs.push(JSON.parse(data) as GraphDef)
+      const isSourceFile =
+        file.endsWith(".source.json") ||
+        file.endsWith(".source.yaml") ||
+        file.endsWith(".source.yml")
+      const isGraphFile =
+        file.endsWith(".json") ||
+        file.endsWith(".yaml") ||
+        file.endsWith(".yml")
+      if (!isGraphFile || isSourceFile) continue
+      const filePath = join(this.graphsDir, file)
+      const data = await readFile(filePath, "utf-8")
+      graphs.push(parseGraph(data, filePath))
     }
     return graphs
   }
