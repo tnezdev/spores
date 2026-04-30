@@ -209,6 +209,33 @@ Hook env vars: `SPORES_ARTIFACT_ID`, `SPORES_ARTIFACT_TYPE`, `SPORES_ARTIFACT_TI
 
 **Dogfood hook:** `.spores/hooks/artifact.written` — indexes the artifact reference into memory after every write so it's searchable via `spores memory recall`.
 
+**Workflow → artifact worked example:**
+
+A workflow node declares its output type via `artifact.type` (from #50):
+
+```yaml
+nodes:
+  - id: write-brief
+    label: Write Q2 Brief
+    artifact:
+      type: brief
+      description: Q2 launch brief produced by the briefing workflow
+```
+
+After the workflow run completes and the node produces its output, the caller persists it:
+
+```bash
+# Node output lands in the transition; caller writes it as a named artifact
+BODY=$(spores workflow status "$RUN_ID" --json | jq -r '.nodes[-1].artifact.content')
+ARTIFACT_ID=$(spores artifact create brief "$BODY" --title "Q2 Brief" --tags "briefing,q2" --json | jq -r '.artifact.id')
+
+# artifact.written hook fires automatically → reference indexed into memory
+# Later retrieval
+spores memory recall "Q2 Brief"
+```
+
+The dogfood hook wires the last step without any special-cased plumbing in spores itself.
+
 ## What NOT to add
 
 - Sessions, webhooks, hosting — daemon-layer, not SPORES
