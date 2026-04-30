@@ -344,6 +344,74 @@ export type DispatchHandlerHooks = {
 }
 
 // ---------------------------------------------------------------------------
+// Artifact types
+//
+// An Artifact is a named, versioned piece of content produced by an agent
+// turn — addressable, persistable, lockable, and hookable. It is the
+// standalone primitive that workflow node outputs (Transition.artifact) point
+// at once they have been persisted.
+//
+// Lifecycle: created → written (iterate | replace) → locked (append-only).
+// Deletion is intentionally absent from the MVP; locked artifacts are
+// append-only history. Archive/drop can come later once use signals it.
+// ---------------------------------------------------------------------------
+
+/** ULID-shaped identifier for an artifact. */
+export type ArtifactId = string
+
+/**
+ * The full persisted record for an artifact. `body_ref` is an
+ * adapter-defined locator — a filesystem path, blob key, etc.
+ */
+export type ArtifactRecord = {
+  id: ArtifactId
+  type: string               // aligns with NodeArtifactDef.type from workflow nodes
+  title: string
+  body_ref: string           // adapter-defined reference (FS path, blob key, etc.)
+  version: number
+  locked: boolean
+  tags: string[]
+  created_at: string         // ISO 8601
+  updated_at: string         // ISO 8601
+  derived_from?: ArtifactId  // structural edge — derivation / versioning lineage
+}
+
+/**
+ * Artifact metadata with computed fields. `pending_changes` is derived
+ * and not stored; `size_bytes` is optional and adapter-provided.
+ */
+export type ArtifactMetadata = ArtifactRecord & {
+  pending_changes: boolean
+  size_bytes?: number | undefined
+}
+
+/** Lightweight artifact reference — id + type + title only. */
+export type ArtifactRef = {
+  id: ArtifactId
+  type: string
+  title: string
+  version: number
+  locked: boolean
+  tags: string[]
+  updated_at: string
+}
+
+/** Filter for listing artifacts. All fields are optional. */
+export type ArtifactQuery = {
+  type?: string | undefined
+  tags?: string[] | undefined
+  locked?: boolean | undefined
+}
+
+/**
+ * Write mode for `artifact write`:
+ * - `iterate` — bump version number, keep prior version accessible
+ * - `replace` — overwrite current version in place (same version number)
+ * - `create` — fail if an artifact with this id already exists
+ */
+export type ArtifactWriteMode = "iterate" | "replace" | "create"
+
+// ---------------------------------------------------------------------------
 // Hook types
 // ---------------------------------------------------------------------------
 
@@ -525,4 +593,52 @@ export type WakeOutput = {
   template_path?: string | undefined // resolved path to the template file
   situational: SituationalContext
   hook?: HookInvocation | undefined
+}
+
+// ---------------------------------------------------------------------------
+// Artifact output wrappers
+// ---------------------------------------------------------------------------
+
+/**
+ * Output of `artifact create` — the newly created record plus any
+ * `artifact.created` hook that fired.
+ */
+export type ArtifactCreatedOutput = {
+  artifact: ArtifactRecord
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `artifact write` — the updated record (new version if mode is
+ * `iterate`) plus any `artifact.written` hook that fired.
+ */
+export type ArtifactWrittenOutput = {
+  artifact: ArtifactRecord
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `artifact edit` — the updated record plus any `artifact.edited`
+ * hook that fired.
+ */
+export type ArtifactEditedOutput = {
+  artifact: ArtifactRecord
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `artifact lock` — the locked record plus any `artifact.locked`
+ * hook that fired.
+ */
+export type ArtifactLockedOutput = {
+  artifact: ArtifactRecord
+  hook?: HookInvocation | undefined
+}
+
+/**
+ * Output of `artifact inspect` — the metadata record. No hook fires on
+ * reads.
+ */
+export type ArtifactInspectedOutput = {
+  artifact: ArtifactMetadata
 }
